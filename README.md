@@ -33,8 +33,9 @@ This firmware only fits one hardware version. Radios that look identical can hav
 
 | Screen says | What to do |
 |---|---|
-| `5RHNRFB-YP07` | This is the right hardware, so carry on |
-| Anything else, such as `...NRF` or `...BK` | **Don't flash it.** It may boot but not transmit or receive |
+| `5RHNRFB-YP07` | This is the right hardware, so carry on with `UV-5RM_Custom_Firmware.BF` |
+| `5RHBK` | Carry on, but flash `UV-5RM_Custom_Firmware_BK4819.BF` instead. See [BK4819 radios](#bk4819-radios-5rhbk) |
+| Anything else, such as `...NRF` | **Don't flash it.** It may boot but not transmit or receive |
 
 ## What you need
 
@@ -55,8 +56,9 @@ mkdir my-backup
 py source-changes\radio_read.py COM3 my-backup\factory_memory.img
 ```
 
-**2. Enter flash mode.** Turn the radio off, hold **both side buttons** and turn it on. The screen
-stays black. Check that it answers (this doesn't write anything):
+**2. Enter flash mode.** Turn the radio off, hold **both side buttons** and turn it on. On radios
+with an orange button above PTT and a black one below it, those are the two to hold. The screen
+stays black, and the flashlight may come on. Check that it answers (this doesn't write anything):
 
 ```
 py source-changes\bootloader_probe.py COM3
@@ -69,6 +71,12 @@ the cable. The long number is a checksum, and the tool refuses a file that doesn
 py source-changes\flash_bf.py UV-5RM_Custom_Firmware.BF COM3 4340f205430f0741
 ```
 
+On a `5RHBK` radio, flash the BK4819 build instead:
+
+```
+py source-changes\flash_bf.py UV-5RM_Custom_Firmware_BK4819.BF COM3 05efa908ffa23816
+```
+
 **4. Install the logo and apps.** Wait for the radio to restart to its main screen. This reads
 everything back to confirm it.
 
@@ -76,7 +84,9 @@ everything back to confirm it.
 py source-changes\setup_radio.py COM3 skull_logo.rgb565 64 apps
 ```
 
-**5. Turn on transmit.** It starts off as a safety step. Go to `SETTINGS` and set `TXINH` to off.
+**5. Turn on transmit.** It starts off as a safety step. Go to `SETTINGS`, then `RADIO`, and select
+`TXINH`. Press **Menu**, use **Up/Down** to choose off, then press **Menu** again to save. **Exit**
+cancels the change, and the radio keeps showing `TX PROHIBITED`.
 
 **6. Load channels (optional).** Open `UV-5RM_Channel_Uploader.html` in Chrome or Edge. The channel
 list in this repo is for Clark County, Nevada, so check that it suits your area. Your radio should
@@ -118,6 +128,33 @@ when you opened it. Don't use a repeater.
   security, so any radio with this app can read them.
 - Range and long messages have barely been tested. Most testing was short pings a few feet apart.
 
+## BK4819 radios (5RHBK)
+
+Some UV-5RMs have a Beken BK4819 radio chip instead of the FD6818 this firmware was written for. Their
+boot screen (hold **8** while turning on) shows `5RHBK`. The rest of the board is the same: the same
+MCU, pins, flash chip, screen and bootloader. `UV-5RM_Custom_Firmware_BK4819.BF` is built for them.
+
+**What's different in the BK4819 build** (behind the `bk4819` build option, see
+[Building from source](#building-from-source)):
+
+- It starts the radio chip with Baofeng's own values for this board, taken from the stock `5RH_BK_V0.14`
+  firmware. The standard build uses tuning for the FD6818's sibling chip, which a BK4819 doesn't accept,
+  so a BK radio would boot but not transmit or receive.
+- It sets transmit power the way the stock BK firmware does, which is what the factory power calibration
+  assumes.
+- If the MCU's 16 MHz crystal doesn't start, it runs from the internal clock at the same speed instead
+  of freezing on a black screen. Stock BK firmware never uses the crystal.
+
+**Tested so far:** one `5RHBK` radio on stock `V0.14`. It boots, receives and transmits, and the logo and
+all apps install and verify. Output power hasn't been measured, and `TEXT` hasn't been tried between two
+BK radios. Start on low power, ideally into a dummy load or wattmeter.
+
+**Going back to stock** should be possible, because flashing doesn't touch the bootloader. Baofeng's
+stock BK firmware is in
+[amoxu/Baofeng-UV-5RM-5RH-RE](https://github.com/amoxu/Baofeng-UV-5RM-5RH-RE/tree/main/factory_firmware/BK_BK4819).
+Those files carry a second data region that `source-changes/flash_bf.py` refuses, so they need
+`firmware-source/tools/flash.py`. This restore hasn't been tried.
+
 ## Legal
 
 You're responsible for what you transmit.
@@ -141,6 +178,18 @@ cargo build --release --manifest-path firmware-source/Cargo.toml --config firmwa
 py source-changes/elf2bin.py C:/t/fw/thumbv7em-none-eabi/release/bf5rh-fw fw.bin
 ```
 
+For a `5RHBK` radio, build with `--features bk4819` and wrap the image as a `.BF`. Without the option, the
+build stays byte for byte identical to `UV-5RM_Custom_Firmware.BF` (checked with Rust 1.99.1).
+`wrap_bf.py` checks its encryption against at least five factory `.BF` files first. Download them from
+the `factory_firmware` folder of [amoxu/Baofeng-UV-5RM-5RH-RE](https://github.com/amoxu/Baofeng-UV-5RM-5RH-RE),
+keeping one subfolder per model:
+
+```
+cargo build --release --features bk4819 --manifest-path firmware-source/Cargo.toml --config firmware-source/.cargo/config.toml --target-dir C:/t/fwbk
+py source-changes/elf2bin.py C:/t/fwbk/thumbv7em-none-eabi/release/bf5rh-fw bk.bin
+py source-changes/wrap_bf.py bk.bin UV-5RM_Custom_Firmware_BK4819.BF factory_firmware
+```
+
 `source-changes` holds the patches against upstream and the PC tools. `source-changes/simulator` runs
 the apps against a simulated radio, with no hardware needed:
 
@@ -155,6 +204,8 @@ behaves on the air.
 ## Credits and license
 
 - Firmware base: [bf-5rh-firmware-open](https://github.com/sophiel-meow/bf-5rh-firmware-open)
+- BK4819 values and stock firmware from
+  [amoxu/Baofeng-UV-5RM-5RH-RE](https://github.com/amoxu/Baofeng-UV-5RM-5RH-RE)
 - Modem settings researched from the UV-K5 community's
   [messenger firmware](https://github.com/kamilsss655/uv-k5-firmware-custom)
 - Licensed under GPL-3.0, the same as the firmware it's built on. See `LICENSE`.
