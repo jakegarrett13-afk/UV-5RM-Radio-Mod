@@ -1,5 +1,8 @@
 # Personal: channel dumps, settings and calibration from specific radios.
 UV-5RM Custom Firmware/backup/
+UV-5RM Custom Firmware/my-backup/
+# Baofeng's stock firmware: link to it, don't redistribute it.
+UV-5RM Custom Firmware/stock-recovery/
 *.img
 radio_channels*.bin
 radio_settings*.bin
