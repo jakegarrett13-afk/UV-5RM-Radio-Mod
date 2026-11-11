@@ -17,6 +17,27 @@ nix develop --command cargo build --release
 nix develop --command cargo objcopy --release -- -O binary bf5rh-fw.bin
 ```
 
+## AIRBAND feature
+
+The optional `airband` Cargo feature adds the AIR1 external-flash layout,
+block-addressed database upload and first-item Band/SCAN route for the AIRBAND
+overlay app. It does not change the RF-chip driver or global UI styling.
+
+From `UV-5RM Custom Firmware`:
+
+```sh
+python3 source-changes/airband/build.py
+cargo build --release --locked \
+  --manifest-path firmware-source/Cargo.toml \
+  --config source-changes/airband/firmware.toml \
+  --features airband \
+  --target-dir /tmp/uv5rm-airband-fw
+python3 source-changes/airband/test.py
+```
+
+See the [AIRBAND guide](../airband/README.md) for controls, installation, flash
+allocation, limitations and FAA NASR database-update instructions.
+
 ## Flash (stock bootloader entry only)
 
 1. Wrap+encrypt the built binary(https://github.com/amoxu/Baofeng-UV-5RM-5RH-RE):

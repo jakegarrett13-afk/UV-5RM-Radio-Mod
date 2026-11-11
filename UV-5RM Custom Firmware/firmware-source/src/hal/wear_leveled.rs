@@ -1,5 +1,9 @@
 use crate::drivers::norflash::{NorFlash, SECTOR_SIZE};
 
+#[cfg(feature = "airband")]
+pub(crate) use super::crc::crc16_xmodem;
+
+#[cfg(not(feature = "airband"))]
 pub(crate) fn crc16_xmodem(data: &[u8]) -> u16 {
     let mut crc: u16 = 0;
     for &byte in data {

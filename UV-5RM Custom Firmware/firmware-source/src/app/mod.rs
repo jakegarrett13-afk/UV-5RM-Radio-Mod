@@ -3,6 +3,7 @@ mod input;
 mod keyfn;
 mod keys;
 mod launcher;
+pub(crate) mod menu_routes;
 mod modes;
 pub(crate) mod overlay;
 mod scan;

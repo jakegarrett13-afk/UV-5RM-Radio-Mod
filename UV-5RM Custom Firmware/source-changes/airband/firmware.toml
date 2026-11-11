@@ -1,0 +1,10 @@
+# AIRBAND-specific size profile; other firmware profiles keep their existing flags.
+[build]
+target = "thumbv7em-none-eabi"
+
+[target.thumbv7em-none-eabi]
+rustflags = [
+  "-C", "link-arg=-Tlink.x",
+  # Share repeated Thumb instruction sequences to stay inside the 60 KiB limit.
+  "-C", "llvm-args=--enable-machine-outliner=always",
+]

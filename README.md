@@ -160,3 +160,26 @@ behaves on the air.
 - Licensed under GPL-3.0, the same as the firmware it's built on. See `LICENSE`.
 
 Provided as is, with no warranty.
+
+## AIRBAND feature
+
+The optional [AIRBAND app and database](UV-5RM%20Custom%20Firmware/airband/README.md)
+add offline US airport/VOR lookup, service selection, favorites, scanning and
+manually centered nearby lists. AIRBAND is receive-only and appears as the first
+item in the Band/SCAN frequency-mode list when firmware is built with
+`--features airband`.
+
+This feature does not contain RF-chip or board-support changes. On `5RHBK`
+hardware it is intended to be combined with the separate work in PR #3 after
+that support is applied. It also does not change the firmware's global boot or
+menu backgrounds.
+
+FAA data can be refreshed independently of firmware. The
+[database update guide](UV-5RM%20Custom%20Firmware/airband/README.md#updating-from-faa-sources)
+documents how to select an effective NASR cycle, download `APT.zip`, `FRQ.zip`
+and `NAV.zip`, build and test `airband.db`, and upload only the database while
+preserving favorites.
+
+Automatic location and VOR radial decoding are not implemented. The separate
+[research proposal](docs/airband-location-future/README.md) documents the data,
+signal-processing and validation work that would be required.

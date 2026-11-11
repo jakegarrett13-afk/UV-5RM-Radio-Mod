@@ -338,7 +338,11 @@ fn leave_app(app: &mut App, syst: &mut SYST) {
         HANDOFF_LEN = 0;
         ARENA_EXT = 0;
     }
-    app.mode = Mode::AppMenu;
+    app.mode = if cfg!(feature = "airband") && matches!(app.mode, Mode::External(super::menu_routes::AIRBAND_SLOT)) {
+        Mode::ModeMenu
+    } else {
+        Mode::AppMenu
+    };
     unsafe {
         APP_TX_ENABLED = false;
         APP_HOLDS_RX = false;
@@ -399,6 +403,7 @@ fn handle_result(app: &mut App, syst: &mut SYST, result: AppResult) {
     }
 }
 
+#[cfg_attr(feature = "airband", inline(never))]
 pub(crate) fn enter(app: &mut App, syst: &mut SYST, slot: u8) {
     match load_segment(app, slot, 0) {
         Ok(entry) => {

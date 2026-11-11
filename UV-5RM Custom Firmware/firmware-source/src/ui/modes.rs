@@ -21,7 +21,7 @@ struct ModeSource<'a, 'b> {
 
 impl<'a, 'b> ListSource for ModeSource<'a, 'b> {
     fn row_count(&mut self) -> usize {
-        modes_table().len()
+        modes_table().len() + app::menu_routes::MODE_OFFSET
     }
 
     fn read_flash(&mut self, addr: u32, buf: &mut [u8]) {
@@ -29,7 +29,11 @@ impl<'a, 'b> ListSource for ModeSource<'a, 'b> {
     }
 
     fn label(&mut self, index: usize, w: &mut dyn core::fmt::Write) {
-        let _ = w.write_str(modes_table()[index].name);
+        let label = match app::menu_routes::channel_mode(index) {
+            Some(mode) => modes_table()[mode].name,
+            None => "AIRBAND",
+        };
+        let _ = w.write_str(label);
     }
 
     fn value(&mut self, index: usize, w: &mut dyn core::fmt::Write) -> bool {
@@ -48,7 +52,7 @@ where
 {
     let index = app.mode_menu_index();
     let mut source = ModeSource {
-        current: app.chan_mode_index(),
+        current: app.chan_mode_index() + app::menu_routes::MODE_OFFSET,
         app,
     };
     draw_list(lcd, "MODE", &mut source, index, false, cache);

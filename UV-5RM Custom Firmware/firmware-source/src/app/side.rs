@@ -7,7 +7,12 @@ use crate::flash_map::{self, addr};
 
 /// Airband is AM; nothing else programmed on this radio is.
 fn modulation_for(freq_hz: u32) -> Modulation {
-    if (108_000_000..=136_000_000).contains(&freq_hz) {
+    let upper = if cfg!(feature = "airband") {
+        136_975_000
+    } else {
+        136_000_000
+    };
+    if (108_000_000..=upper).contains(&freq_hz) {
         Modulation::Am
     } else {
         Modulation::Fm

@@ -1,5 +1,7 @@
 pub mod adc;
 pub mod clock;
+#[cfg(feature = "airband")]
+pub mod crc;
 pub mod debounce;
 pub mod delay;
 pub mod stackprobe;

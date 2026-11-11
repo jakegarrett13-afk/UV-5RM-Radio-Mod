@@ -1,0 +1,65 @@
+{
+  "compiler": "rustc 1.99.1 (58cf8f9c3 2026-10-13)",
+  "firmware_features": [
+    "airband"
+  ],
+  "firmware_application_bytes": 61388,
+  "firmware_application_limit": 61440,
+  "firmware_application_free_bytes": 52,
+  "prebuilt_firmware_included": false,
+  "app_abi_unchanged": true,
+  "segments": [
+    {
+      "segment": 0,
+      "image": 8012,
+      "bss": 4,
+      "ram_total": 8016
+    },
+    {
+      "segment": 1,
+      "image": 7152,
+      "bss": 4,
+      "ram_total": 7156
+    },
+    {
+      "segment": 2,
+      "image": 6744,
+      "bss": 4,
+      "ram_total": 6748
+    },
+    {
+      "segment": 3,
+      "image": 7868,
+      "bss": 4,
+      "ram_total": 7872
+    }
+  ],
+  "files": {
+    "airband/airband.db": {
+      "bytes": 305129,
+      "sha256": "16db31f1440a1428d290d5dc6d8fb4f94af343d201aae696aac69a55c2925208"
+    },
+    "apps/airband.app": {
+      "bytes": 29884,
+      "sha256": "9a0b98c280816304db2f4a692d6911acf6ea23257463f329645a55792d56a6f1"
+    }
+  },
+  "hardware_tested": false,
+  "validation": {
+    "python_checks": 12,
+    "native_app_test_runs": 37,
+    "firmware_menu_route_test_runs": 4,
+    "default_firmware_build": true,
+    "airband_firmware_build": true,
+    "app_package_validated": true,
+    "national_database_validated": true,
+    "user_interface_tested_on_exact_pr_build": false,
+    "am_audio_tested_on_exact_pr_build": false
+  },
+  "release": "AIRBAND",
+  "firmware_build_config": "source-changes/airband/firmware.toml",
+  "firmware_extra_rustflags": [
+    "-C",
+    "llvm-args=--enable-machine-outliner=always"
+  ]
+}

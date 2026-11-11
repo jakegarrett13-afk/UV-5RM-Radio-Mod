@@ -207,7 +207,7 @@ fn dispatch_app_menu(app: &mut App, syst: &mut SYST, ev: KeyEvent) {
             KeyId::Menu if ev.kind == KeyEventKind::Single => {
                 let index = app.launcher_index;
                 if launcher::is_available_at(app, index) {
-                    super::overlay::enter(app, syst, index as u8);
+                    super::overlay::enter(app, syst, super::menu_routes::app_slot(index));
                 }
             }
             KeyId::Exit if ev.kind == KeyEventKind::Single => {

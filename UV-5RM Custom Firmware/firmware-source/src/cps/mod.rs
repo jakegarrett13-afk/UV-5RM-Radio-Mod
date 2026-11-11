@@ -17,7 +17,10 @@ const MAX_CHANNEL_NUM: u16 = 999;
 
 const SAT_TABLE_BASE: u32 = addr::OVERLAY_DATA_ADDR;
 /// 20 records * 256 bytes, spanning two 4KB sectors.
+#[cfg(not(feature = "airband"))]
 const SAT_TABLE_SIZE: u32 = 5120;
+#[cfg(feature = "airband")]
+const SAT_TABLE_SIZE: u32 = 0x5A000; // DB only; favorites at 0x1EE000, TEXT at 0x1F0000
 
 pub struct HandshakeDetector {
     matched: usize,
@@ -329,7 +332,14 @@ fn handle_app_write(
 }
 
 fn handle_sat_write(app: &mut App<'_>, wire_addr: u16, data: &[u8]) {
+    #[cfg(feature = "airband")]
+    if data.is_empty() {
+        send_response(frame::CMD_SAT_WRITE, wire_addr, b"AIR1");
+        return;
+    }
     let offset = wire_addr as u32;
+    #[cfg(feature = "airband")]
+    let offset = offset * frame::SAT_CHUNK; // 512-byte blocks, not 16-bit byte offsets
     let ok = offset.is_multiple_of(frame::SAT_CHUNK)
         && data.len() == frame::SAT_CHUNK as usize
         && offset + frame::SAT_CHUNK <= SAT_TABLE_SIZE;

@@ -13,6 +13,8 @@ bench = false
 
 [features]
 default = []
+# AIR1 database partition and block-addressed upload; replaces satellite-data upload.
+airband = []
 
 [dependencies]
 cortex-m = "0.7"

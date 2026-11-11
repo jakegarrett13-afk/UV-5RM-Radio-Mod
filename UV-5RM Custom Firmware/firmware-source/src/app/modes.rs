@@ -96,7 +96,7 @@ fn first_channel(app: &mut App, mode: u8) -> Option<u16> {
 }
 
 pub(super) fn open_menu(app: &mut App) {
-    app.mode_menu_index = app.chan_mode as usize;
+    app.mode_menu_index = if cfg!(feature = "airband") { 0 } else { app.chan_mode as usize };
     app.input.clear();
     app.mode = Mode::ModeMenu;
 }
@@ -114,7 +114,11 @@ fn play_mode_cue(app: &mut App, syst: &mut SYST) {
     app.radio.play_cue(syst, &tones);
 }
 
-fn select(app: &mut App, syst: &mut SYST, index: usize, then_scan: bool) {
+fn select(app: &mut App, syst: &mut SYST, row: usize, then_scan: bool) {
+    let Some(index) = super::menu_routes::channel_mode(row) else {
+        super::overlay::enter(app, syst, super::menu_routes::AIRBAND_SLOT);
+        return;
+    };
     app.chan_mode = index as u8;
     persist(app);
     app.mode = Mode::Standby;
@@ -149,7 +153,7 @@ fn select(app: &mut App, syst: &mut SYST, index: usize, then_scan: bool) {
 }
 
 pub(super) fn dispatch_menu(app: &mut App, syst: &mut SYST, ev: KeyEvent) {
-    let len = MODES.len();
+    let len = MODES.len() + super::menu_routes::MODE_OFFSET;
     match (ev.kind, ev.key) {
         (KeyEventKind::Single | KeyEventKind::Repeat, KeyId::Up) => {
             app.mode_menu_index = (app.mode_menu_index + len - 1) % len;

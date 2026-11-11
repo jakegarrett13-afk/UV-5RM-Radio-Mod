@@ -1,3 +1,6 @@
+#[cfg(feature = "airband")]
+use crate::hal::crc::{crc16_xmodem, crc16_xmodem_update};
+#[cfg(not(feature = "airband"))]
 use crate::hal::wear_leveled::crc16_xmodem;
 
 pub const HEADER: u8 = 0xA6;
@@ -156,6 +159,7 @@ impl FrameReader {
     }
 }
 
+#[cfg(not(feature = "airband"))]
 fn frame_crc(cmd: u8, addr: u16, data: &[u8]) -> u16 {
     let mut buf = [0u8; 5 + MAX_DATA];
     buf[0] = cmd;
@@ -163,6 +167,20 @@ fn frame_crc(cmd: u8, addr: u16, data: &[u8]) -> u16 {
     buf[3..5].copy_from_slice(&(data.len() as u16).to_be_bytes());
     buf[5..5 + data.len()].copy_from_slice(data);
     crc16_xmodem(&buf[..5 + data.len()])
+}
+
+#[cfg(feature = "airband")]
+#[inline(never)]
+fn frame_crc(cmd: u8, addr: u16, data: &[u8]) -> u16 {
+    let len = data.len() as u16;
+    let header = [
+        cmd,
+        (addr >> 8) as u8,
+        addr as u8,
+        (len >> 8) as u8,
+        len as u8,
+    ];
+    crc16_xmodem_update(crc16_xmodem(&header), data)
 }
 
 /// Encode a response frame into `out`, returning the number of bytes

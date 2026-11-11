@@ -1,0 +1,19 @@
+{
+  "facilities": 8523,
+  "airports": 7740,
+  "navaids": 783,
+  "frequencies": 23784,
+  "aliases": 293,
+  "bytes": 305129,
+  "capacity": 368640,
+  "effective": "20261029",
+  "sha256": "16db31f1440a1428d290d5dc6d8fb4f94af343d201aae696aac69a55c2925208",
+  "states": [],
+  "source": "FAA 28-day NASR",
+  "source_sha256": {
+    "APT": "6e1e422f483d44cc8a38a1c97cf98e97588a6fc3fa857b39b5bdcbcfe8331154",
+    "FRQ": "4d203baaf84de762becf7455f4271246b960aeca75634ce823e10cbc18dc1b0e",
+    "NAV": "a17d2851849594630fbfc9c6f7b06c09827c461aa680f632398741c9e7f55627"
+  },
+  "coverage": "US airports with supported published VHF frequencies and operational VOR-family navaids; names abbreviated to 22 characters; duplicate service/frequency entries merged; sector/remarks omitted"
+}
