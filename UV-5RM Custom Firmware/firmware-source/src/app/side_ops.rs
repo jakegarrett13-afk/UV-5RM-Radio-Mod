@@ -14,6 +14,7 @@ pub(super) fn push_watching_config(app: &mut App) {
     app.radio.set_subaudio_tx(s.cfg.subaudio_tx);
     app.radio.set_subaudio_rx(s.cfg.subaudio_rx);
     app.radio.set_modulation(s.cfg.modulation);
+    app.radio.set_scramble_value(s.scramble);
 }
 
 pub(super) fn apply_watching_to_radio(app: &mut App, syst: &mut SYST) {
@@ -70,9 +71,7 @@ pub(super) fn find_programmed_channel(
         } else {
             num - 1
         };
-        if !app.storage.is_channel_empty(num)
-            && modes::contains(app.chan_mode, num)
-        {
+        if !app.storage.is_channel_empty(num) && modes::contains(app, num) {
             return Some(num);
         }
     }
@@ -86,9 +85,7 @@ pub(super) fn commit_input(app: &mut App, syst: &mut SYST) {
             // Typed numbers count from 1 like the printed sheet; flash slots from 0.
             if (1..=MAX_CHANNEL_NUM as u32 + 1).contains(&value) {
                 let num = value as u16 - 1;
-                if !app.storage.is_channel_empty(num)
-                    && modes::contains(app.chan_mode, num)
-                {
+                if !app.storage.is_channel_empty(num) && modes::contains(app, num) {
                     load_channel_num(app, num);
                     sync_watching_to_master(app, syst);
                 }
@@ -119,11 +116,11 @@ pub(super) fn toggle_vfo_channel(app: &mut App, syst: &mut SYST) {
                 subaudio_tx: s.cfg.subaudio_tx,
                 subaudio_rx: s.cfg.subaudio_rx,
                 ani_target: s.ani_target,
+                scramble: s.scramble,
+                busy_lock: s.busy_lock,
             };
             let num = s.channel_num;
-            let num = if app.storage.is_channel_empty(num)
-                || !modes::contains(app.chan_mode, num)
-            {
+            let num = if app.storage.is_channel_empty(num) || !modes::contains(app, num) {
                 find_programmed_channel(app, num, true)
             } else {
                 Some(num)

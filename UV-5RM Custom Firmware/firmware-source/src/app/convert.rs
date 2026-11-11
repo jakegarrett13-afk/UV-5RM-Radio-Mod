@@ -19,7 +19,7 @@ pub(super) fn channel_name_str(raw: &[u8; 12]) -> &str {
         .iter()
         .position(|&b| b == 0x00 || b == 0xFF)
         .unwrap_or(raw.len());
-    core::str::from_utf8(&raw[..end]).unwrap_or("")
+    crate::ui::ascii_str(&raw[..end])
 }
 
 pub(super) fn subaudio_from_code(code: u16) -> SubAudio {

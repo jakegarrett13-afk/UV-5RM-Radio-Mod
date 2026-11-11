@@ -1726,11 +1726,11 @@ fn test_text() {
 
     println!("TEXT: retrying");
     text_open();
-    press(app, 10);
+    press(app, 18);
     let first = chip().aired[0].clone();
     let plain = plain_of(&first);
     let (me, id) = (plain[1], plain[2]);
-    check(&plain[4..10] == b"PING 1", "* sends a numbered ping the same way");
+    check(&plain[4..10] == b"PING 1", "Band sends a numbered ping the same way");
     run(app, 4);
     check(chip().aired.len() == 2 && chip().aired[1] == first, "no reply: the same packet goes again");
     check(textapp::debug_pending() == (true, 2), "on the second try");
@@ -1742,7 +1742,7 @@ fn test_text() {
     air_packet(&words_of(&make_reply(7, me.wrapping_add(1), id)));
     run_ms(app, 500);
     check(textapp::debug_pending().0, "nor one meant for a different radio");
-    press(app, 10);
+    press(app, 18);
     check(textapp::debug_notice().contains("WAIT") && textapp::debug_pending().0, "a second send waits for the first to finish");
     tap(app, 2, 1);
     press(app, 12);
@@ -1755,7 +1755,7 @@ fn test_text() {
 
     println!("TEXT: no reply at all");
     text_open();
-    press(app, 10);
+    press(app, 18);
     run(app, 60);
     check(chip().aired.len() == 8, "stops after eight tries");
     check(textapp::debug_msgs()[0].0 == FAILED, "marks it failed");
@@ -1766,7 +1766,7 @@ fn test_text() {
     text_ok_screen("failed");
     run(app, 30);
     check(chip().aired.len() == 8, "and no more go out");
-    press(app, 10);
+    press(app, 18);
     check(chip().aired.len() == 9, "a new message can still go");
     check(!press(app, 13), "Exit during the wait doesn't leave the app");
     check(textapp::debug_msgs()[1].0 == FAILED && textapp::debug_notice().contains("STOPPED"), "it stops the tries");
@@ -1786,7 +1786,7 @@ fn test_text() {
     check(reply_ms as i32 - packet_ms >= 200 && reply_ms as i32 - packet_ms <= 400, "with a quiet channel the reply waits its minimum");
     text_open();
     let start = sim().now;
-    press(app, 10);
+    press(app, 18);
     let ended = sim().now;
     let sent = chip().aired.len();
     check(sent == 1, "first try sent");
@@ -1819,7 +1819,7 @@ fn test_text() {
     run(app, 1);
     check(chip().aired.len() == 1 && textapp::debug_got() == 1, "the sender's next try gets it");
     text_open();
-    press(app, 10);
+    press(app, 18);
     add(OUT, 120, -1, |_| true);
     run(app, 4);
     check(chip().aired.len() == 1, "a retry waits while someone is on the channel");
@@ -1827,7 +1827,7 @@ fn test_text() {
     run(app, 1);
     check(chip().aired.len() == 2, "and goes when they stop");
     text_open();
-    press(app, 10);
+    press(app, 18);
     add(OUT, 120, -1, |_| true);
     run(app, 9);
     check(chip().aired.len() == 2, "a stuck carrier can't hold the tries up forever");
@@ -2004,7 +2004,7 @@ fn test_text() {
 
     println!("TEXT: both radios talking");
     text_open();
-    press(app, 10);
+    press(app, 18);
     let plain = plain_of(&chip().aired[0]);
     let (me, id) = (plain[1], plain[2]);
     air_packet(&words_of(&make_packet(9, 70, 0, 1, b"CROSSED")));
@@ -2018,7 +2018,7 @@ fn test_text() {
     check(textapp::debug_msgs()[0].0 == DELIVERED, "whose reply can still arrive");
     check(chip().regs[0x59] == 0x1008 && !sim().transmitting, "and it ends listening");
     text_open();
-    press(app, 10);
+    press(app, 18);
     run(app, 3);
     let n = chip().aired.len();
     air_packet(&words_of(&make_packet(9, 71, 0, 1, b"LATE")));
@@ -2028,11 +2028,11 @@ fn test_text() {
     println!("TEXT: power and message history");
     text_open();
     press(app, 17);
-    press(app, 10);
+    press(app, 18);
     check(sim().power == 0, "A/B switches to high power");
     press(app, 13);
     press(app, 17);
-    press(app, 10);
+    press(app, 18);
     check(sim().power == 1, "and back to low");
     press(app, 13);
     check(chip().regs[0x58] == 0x0301 && chip().regs[0x72] == 4646, "# no longer changes anything");
@@ -2052,6 +2052,139 @@ fn test_text() {
     text_ok_screen("scrolled");
     press(app, 15);
     text_ok_screen("scrolled down");
+
+    println!("TEXT: key lock");
+    text_open();
+    hold(app, 10);
+    check(textapp::debug_quick().2 && textapp::debug_notice().contains("LOCKED"), "holding * locks the keys");
+    tap(app, 4, 2);
+    press(app, 12);
+    press(app, 18);
+    press(app, 16);
+    press(app, 17);
+    check(textapp::debug_comp().is_empty() && chip().aired.is_empty() && !textapp::debug_quick().0, "locked, typing, Menu, Band and VFO/MR do nothing");
+    check(!press(app, 13) && !hold(app, 13), "and Exit can't close the app");
+    run(app, 4);
+    textapp::entry(&API, AppEvent::Draw);
+    shot("txt_11_locked");
+    text_ok_screen("locked");
+    air_packet(&words_of(&make_packet(9, 80, 0, 1, b"STILL HEARS")));
+    run(app, 2);
+    check(textapp::debug_got() == 1 && chip().aired.len() == 1, "it still receives and replies while locked");
+    hold(app, 10);
+    check(!textapp::debug_quick().2 && textapp::debug_notice().contains("UNLOCKED"), "holding * again unlocks");
+    tap(app, 4, 2);
+    check(textapp::debug_comp() == "H", "and typing works again");
+    press(app, 10);
+    check(chip().aired.len() == 1 && textapp::debug_comp() == "H", "a short press of * sends nothing now");
+
+    println!("TEXT: quick messages");
+    text_open();
+    press(app, 16);
+    check(textapp::debug_quick() == (true, 0, false), "VFO/MR opens the quick messages at the first one");
+    textapp::entry(&API, AppEvent::Draw);
+    shot("txt_12_quick");
+    text_ok_screen("quick list");
+    press(app, 15);
+    press(app, 15);
+    check(textapp::debug_quick().1 == 2, "Down moves through them");
+    text_ok_screen("quick list moved");
+    for _ in 0..3 {
+        press(app, 14);
+    }
+    check(textapp::debug_quick().1 == 9, "and Up wraps from the first to the last");
+    press(app, 4);
+    check(textapp::debug_quick().1 == 3, "a number key picks that one");
+    press(app, 0);
+    check(textapp::debug_quick().1 == 9, "and 0 is the tenth");
+    textapp::entry(&API, AppEvent::Draw);
+    shot("txt_13_quick_tenth");
+    press(app, 12);
+    check(chip().aired.len() == 1 && &plain_of(&chip().aired[0])[4..29] == b"EMERGENCY! NEED HELP NOW\0", "Menu sends it");
+    check(!textapp::debug_quick().0 && textapp::debug_msgs() == vec![(SENDING, "EMERGENCY! NEED HELP NOW".to_string())], "and closes the list, showing it as sending");
+    text_ok_screen("after a quick send");
+    press(app, 16);
+    press(app, 12);
+    check(textapp::debug_quick().0 && textapp::debug_notice().contains("WAIT") && chip().aired.len() == 1, "a second one waits for the first, with the list still open");
+    press(app, 13);
+    check(!textapp::debug_quick().0 && textapp::debug_pending().0, "Exit closes the list without stopping the send");
+    text_ok_screen("list closed");
+
+    text_open();
+    tap(app, 4, 2);
+    run(app, 2);
+    press(app, 16);
+    check(textapp::debug_comp() == "H", "opening the list keeps what you typed");
+    press(app, 6);
+    press(app, 11);
+    check(textapp::debug_comp() == "ON MY WAY" && !textapp::debug_quick().0, "# puts the chosen one in the typing box instead");
+    text_ok_screen("quick message in the typing box");
+    type_text(app, b" SOON");
+    press(app, 12);
+    check(&plain_of(&chip().aired[0])[4..19] == b"ON MY WAY SOON\0", "where it can be changed before sending");
+    text_open();
+    press(app, 16);
+    press(app, 16);
+    check(!textapp::debug_quick().0 && chip().aired.is_empty(), "VFO/MR closes the list again too");
+
+    println!("TEXT: quick messages set from the PC");
+    text_open();
+    {
+        let n = nor();
+        let b = 0x19_4000;
+        n[b] = b'Q';
+        n[b + 1] = 12;
+        n[b + 2..b + 14].copy_from_slice(b"MEET AT CAMP");
+        n[b + 64] = b'Q';
+        n[b + 65] = 0;
+        n[b + 128] = b'Q';
+        n[b + 129] = 200;
+        n[b + 192] = b'Q';
+        n[b + 193] = 2;
+        n[b + 194] = b'A';
+        n[b + 195] = 0x07;
+        n[b + 9 * 64] = b'Q';
+        n[b + 9 * 64 + 1] = 50;
+        n[b + 9 * 64 + 2..b + 9 * 64 + 52].copy_from_slice(&long[..50]);
+    }
+    press(app, 16);
+    textapp::entry(&API, AppEvent::Draw);
+    shot("txt_14_quick_from_pc");
+    text_ok_screen("list from the PC");
+    press(app, 12);
+    check(&plain_of(&chip().aired[0])[4..17] == b"MEET AT CAMP\0", "a message saved from the PC replaces the built-in one");
+    text_reopen();
+    press(app, 16);
+    press(app, 2);
+    press(app, 12);
+    check(chip().aired.is_empty() && textapp::debug_notice().contains("EMPTY") && textapp::debug_quick().0, "one left blank on the PC can't be sent");
+    press(app, 3);
+    press(app, 11);
+    check(textapp::debug_comp() == "NO", "a damaged one reads as the built-in message");
+    press(app, 16);
+    press(app, 4);
+    press(app, 11);
+    check(textapp::debug_comp() == "A?", "characters the screen can't show become question marks");
+    press(app, 16);
+    press(app, 5);
+    press(app, 11);
+    check(textapp::debug_comp() == "ALL OK HERE", "ones the PC didn't set keep the built-in message");
+    for _ in 0..11 {
+        press(app, 13);
+    }
+    press(app, 16);
+    press(app, 0);
+    textapp::entry(&API, AppEvent::Draw);
+    shot("txt_15_quick_long");
+    text_ok_screen("long quick message");
+    press(app, 12);
+    check(chip().aired.len() == 2 && textapp::debug_msgs().last().unwrap().1.as_bytes() == &long[..50], "a full 50 characters goes as two packets");
+    press(app, 13);
+    hold(app, 10);
+    press(app, 17);
+    hold(app, 10);
+    press(app, 18);
+    check(chip().aired.len() == 3 && sim().power == 1, "A/B did nothing while locked, so the next ping still goes on low power");
 
     println!("TEXT: tones");
     text_open();
@@ -2076,15 +2209,18 @@ fn test_text() {
     run(app, 2);
     check(unsafe { SPEAKER_TURN_ONS } == turned, "a repeat doesn't ring again");
     text_open();
-    press(app, 10);
+    press(app, 18);
     let plain = plain_of(&chip().aired[0]);
     let turned = unsafe { SPEAKER_TURN_ONS };
     air_packet(&words_of(&make_reply(7, plain[1], plain[2])));
     run(app, 1);
-    check(unsafe { SPEAKER_TURN_ONS } == turned + 1 && chip().tones.len() == 1, "a delivery confirmation plays one note");
+    check(
+        unsafe { SPEAKER_TURN_ONS } == turned + 1 && chip().tones.len() == 2 && chip().tones[0] > chip().tones[1],
+        "a delivery confirmation plays high then low, the incoming chime backwards",
+    );
     check(chip().regs[0x59] == 0x1008 && !sim().transmitting, "and it keeps listening");
     text_open();
-    press(app, 10);
+    press(app, 18);
     let turned = unsafe { SPEAKER_TURN_ONS };
     run(app, 40);
     check(unsafe { SPEAKER_TURN_ONS } == turned, "no tone when a message fails");
@@ -2098,7 +2234,7 @@ fn test_text() {
     run(app, 1);
     air_packet(&words_of(&make_packet(9, 80, 0, 1, b"KEPT")));
     run(app, 1);
-    press(app, 10);
+    press(app, 18);
     let before = textapp::debug_msgs();
     check(hold(app, 13), "closing the app");
     text_reopen();
@@ -2108,7 +2244,7 @@ fn test_text() {
     check(m.len() == 3 && m[0] == (DELIVERED, "A".to_string()) && m[1] == (RECEIVED, "KEPT".to_string()), "messages and their marks are still there after reopening");
     check(m[2] == (FAILED, "PING 1".to_string()) && before[2].0 == SENDING, "one closed mid-send comes back as not confirmed");
     text_ok_screen("reopened");
-    press(app, 10);
+    press(app, 18);
     let m = textapp::debug_msgs();
     check(m.len() == 4 && m[3].1 == "PING 1" && m[3].0 == SENDING, "new messages add to the end");
     press(app, 13);
@@ -2214,7 +2350,7 @@ fn test_text() {
     check(hold(app, 13), "holding Exit leaves even with text typed");
     check(chip().regs[0x58] == 0, "and switches the modem off too");
     text_open();
-    press(app, 10);
+    press(app, 18);
     check(hold(app, 13), "holding Exit leaves even while waiting for a reply");
     check(chip().regs[0x58] == 0 && !sim().transmitting, "with the modem off");
     app(&API, AppEvent::Leave);

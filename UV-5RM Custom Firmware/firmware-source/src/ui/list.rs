@@ -324,7 +324,7 @@ where
     D: DrawTarget<Color = Rgb565>,
 {
     let width =
-        text.chars().count() as i32 * FONT_6X10.character_size.width as i32;
+        text.len() as i32 * FONT_6X10.character_size.width as i32;
     let x = (SCREEN_W - width) / 2;
     Text::new(
         text,
@@ -340,7 +340,7 @@ where
     D: DrawTarget<Color = Rgb565>,
 {
     let width =
-        text.chars().count() as i32 * FONT_6X10.character_size.width as i32;
+        text.len() as i32 * FONT_6X10.character_size.width as i32;
     let x = SCREEN_W - RIGHT_MARGIN - width;
     Text::new(
         text,
@@ -377,7 +377,7 @@ fn draw_value_with_cursor<D>(
     draw_value(lcd, text, baseline_y, fg);
 
     let char_w = FONT_6X10.character_size.width as i32;
-    let width = text.chars().count() as i32 * char_w;
+    let width = text.len() as i32 * char_w;
     let x0 = SCREEN_W - RIGHT_MARGIN - width;
 
     draw_cursor_box(lcd, text, cursor_index, x0, row_top, baseline_y, fg);
@@ -437,7 +437,7 @@ where
     D: DrawTarget<Color = Rgb565>,
 {
     let char_w = FONT_6X10.character_size.width as i32;
-    let value_width = text.chars().count() as i32 * char_w;
+    let value_width = text.len() as i32 * char_w;
     let total_width = char_w + ARROW_GAP + value_width + ARROW_GAP + char_w;
     let start_x = SCREEN_W - RIGHT_MARGIN - total_width;
     let baseline = row_top + FONT_6X10.baseline as i32 + 2;

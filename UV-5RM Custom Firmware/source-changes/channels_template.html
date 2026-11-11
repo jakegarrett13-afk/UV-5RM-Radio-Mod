@@ -1,0 +1,1434 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>UV-5RM Channels</title>
+<style>
+:root {
+  color-scheme: dark;
+  --bg: #000; --panel: rgba(14, 3, 3, .62); --panel-solid: #120404; --ink: #f5ecec; --muted: #b39a9a;
+  --line: #4a1616; --red: #8b0000; --red-hi: #b01212; --red-ink: #ff6b5e; --select: #520707; --warn: #ffb347; --ok: #6fd09c;
+}
+* { box-sizing: border-box; }
+html { background: var(--bg); }
+/* No background on body: it would paint over the logo, which sits behind the page. html is black. */
+body { margin: 0; color: var(--ink); font: 14px/1.4 "Segoe UI", system-ui, sans-serif; }
+/* Fitted between the header (or, on the start screen, the panels) and the bottom bar, so the whole
+   logo shows at any window size. */
+body::before {
+  content: ""; position: fixed; inset: var(--logo-top, 72px) 16px 72px; z-index: -1; opacity: .8;
+  background: url("__SKULL__") center center / contain no-repeat;
+}
+header { background: rgba(50, 0, 0, .92); border-bottom: 2px solid var(--red-hi); padding: 12px 20px; display: flex; gap: 14px; align-items: center; flex-wrap: wrap; position: sticky; top: 0; z-index: 4; }
+h1 { font-size: 20px; margin: 0; letter-spacing: .03em; }
+.spacer { flex: 1; }
+main { max-width: 1320px; margin: 0 auto; padding: 14px 16px 110px; }
+button, .filebtn { font: inherit; padding: 7px 12px; border: 1px solid var(--line); border-radius: 6px; background: rgba(30, 6, 6, .95); color: var(--ink); cursor: pointer; display: inline-block; }
+button:hover:not(:disabled), .filebtn:hover { border-color: var(--red-hi); background: var(--select); }
+button:disabled { opacity: .45; cursor: not-allowed; }
+button.primary { background: var(--red); border-color: var(--red-hi); font-weight: 600; }
+button.primary:hover:not(:disabled) { background: var(--red-hi); }
+button.mini { font-size: 12px; padding: 3px 9px; font-weight: 400; }
+button.x { font-size: 12px; padding: 2px 8px; color: var(--muted); }
+button.x:hover { color: var(--ink); }
+:focus-visible { outline: 2px solid var(--red-ink); outline-offset: 1px; }
+input, select { font: inherit; padding: 6px 8px; border: 1px solid var(--line); border-radius: 6px; background: #0c0202; color: var(--ink); min-width: 0; }
+input[type=checkbox] { accent-color: var(--red-hi); width: 16px; height: 16px; padding: 0; flex-shrink: 0; }
+.panel { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; margin-bottom: 10px; }
+.toolbar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+#search { flex: 1 1 240px; }
+.hidden { display: none !important; }
+#notice { margin: 0; }
+#notice.err { color: var(--warn); font-weight: 600; }
+#notice.ok { color: var(--ok); }
+#notice button { margin-left: 8px; font-size: 12px; padding: 2px 10px; }
+.muted { color: var(--muted); font-size: 12px; }
+
+/* start screen */
+#start h2 { margin: 4px 0 12px; font-size: 18px; }
+.choices { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; }
+.choice { display: flex; flex-direction: column; gap: 6px; text-align: left; padding: 14px 16px; border-radius: 8px; }
+.choice b { font-size: 16px; }
+.choice span { color: var(--muted); font-size: 13px; font-weight: 400; }
+.choice.primary span { color: #f1d6d6; }
+
+/* bands */
+details.sec { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; margin-bottom: 8px; overflow: hidden; }
+details.sec > summary { background: rgba(70, 0, 0, .5); padding: 8px 10px; cursor: pointer; display: flex; flex-wrap: wrap; gap: 8px; align-items: center; font-weight: 600; }
+summary .short { font-size: 11px; font-weight: 400; padding: 1px 7px; border-radius: 10px; border: 1px solid var(--line); color: var(--muted); white-space: nowrap; }
+summary .count { margin-left: auto; font-weight: 400; color: var(--muted); font-size: 12px; white-space: nowrap; }
+summary .acts { display: flex; gap: 6px; }
+@media (max-width: 600px) { summary .ttl { flex: 1 1 0; min-width: 0; } }
+details.nob > summary { background: rgba(40, 20, 20, .5); }
+.emptygrp { padding: 10px; color: var(--muted); font-size: 13px; }
+.tablewrap { overflow-x: auto; }
+table { width: 100%; border-collapse: collapse; font-size: 13px; }
+th { text-align: left; font-size: 12px; color: var(--muted); font-weight: 600; padding: 5px 8px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+td { padding: 4px 8px; border-bottom: 1px solid rgba(74, 22, 22, .55); }
+tr:last-child td { border-bottom: 0; }
+tbody tr { cursor: pointer; }
+tbody tr:hover td { background: var(--select); }
+td.nm { font-weight: 600; white-space: nowrap; }
+td.num { font-variant-numeric: tabular-nums; white-space: nowrap; }
+td.tags { white-space: nowrap; }
+td.del { width: 1%; }
+.tag { font-size: 11px; padding: 1px 6px; border-radius: 10px; border: 1px solid var(--red-hi); color: var(--red-ink); white-space: nowrap; }
+.tag.warn { border-color: var(--warn); color: var(--warn); }
+details.help > summary { cursor: pointer; font-weight: 600; }
+details.help ul { margin: 8px 0 0; padding-left: 20px; }
+details.help li { margin-bottom: 4px; }
+
+.bar { position: fixed; left: 0; right: 0; bottom: 0; background: rgba(32, 0, 0, .96); border-top: 2px solid var(--red-hi); padding: 10px 16px; display: flex; gap: 12px; align-items: center; flex-wrap: wrap; z-index: 4; }
+#tally { font-weight: 600; }
+progress { flex: 1 1 200px; height: 12px; accent-color: var(--red-hi); }
+
+dialog { background: var(--panel-solid); color: var(--ink); border: 2px solid var(--red-hi); border-radius: 10px; max-width: min(620px, 94vw); padding: 16px; }
+dialog::backdrop { background: rgba(0, 0, 0, .75); }
+dialog h2 { margin: 0 0 10px; font-size: 17px; }
+.grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 10px; }
+.grid label { display: flex; flex-direction: column; gap: 3px; font-size: 12px; color: var(--muted); }
+.grid label.wide, .grid .wide { grid-column: 1 / -1; }
+.grid label.check { flex-direction: row; align-items: center; gap: 8px; color: var(--ink); font-size: 14px; }
+fieldset { border: 1px solid var(--line); border-radius: 6px; padding: 8px 10px; margin: 0; }
+legend { font-size: 12px; color: var(--muted); padding: 0 4px; }
+#fBands { display: flex; flex-wrap: wrap; gap: 6px 14px; }
+#fBands label { display: inline-flex; flex-direction: row; align-items: center; gap: 6px; color: var(--ink); font-size: 13px; }
+.actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 14px; flex-wrap: wrap; }
+.actions .danger { margin-right: auto; }
+.formErr { color: var(--warn); font-weight: 600; margin: 8px 0 0; min-height: 1.2em; }
+#diffList { max-height: 240px; overflow: auto; margin: 8px 0; padding: 0; list-style: none; font-size: 13px; }
+#diffList li { padding: 2px 0; border-bottom: 1px solid rgba(74, 22, 22, .55); }
+#qList { margin: 0; padding-left: 26px; display: grid; gap: 6px; }
+#qList li::marker { color: var(--muted); }
+#qList .qrow { display: flex; gap: 8px; align-items: center; }
+#qList input { flex: 1; font-family: Consolas, "Courier New", monospace; text-transform: uppercase; }
+#qList .qcount { font-size: 11px; color: var(--muted); width: 36px; text-align: right; font-variant-numeric: tabular-nums; }
+#qList li.changed input { border-color: var(--red-hi); }
+</style>
+</head>
+<body>
+<header>
+  <h1>UV-5RM Channels</h1>
+  <span id="source" class="muted"></span>
+  <span class="spacer"></span>
+  <button id="quickBtn">Quick messages</button>
+  <button id="changeList" class="hidden">Load a different list</button>
+</header>
+
+<main>
+  <div id="noSerial" class="panel hidden"><p style="margin:0"><b>This browser can't reach the radio.</b> Open this file in Chrome or Edge to read or write the radio.</p></div>
+  <div class="panel"><p id="notice" role="status">Plug in the cable, turn the radio on and leave it on its main screen. Close any other program using the cable.</p></div>
+
+  <section id="start" class="panel">
+    <h2>Where do you want to start?</h2>
+    <div class="choices">
+      <button id="startRadio" class="choice primary"><b>Read my radio</b><span>Edit the channels and bands already on it.</span></button>
+      <button id="startBuiltin" class="choice"><b>Clark County list</b><span id="builtinInfo">The channel list that comes with this repo.</span></button>
+      <label class="choice filebtn" tabindex="0"><b>Open a file</b><span>A list you saved from this page (.csv), or a radio backup (.bin).</span><input type="file" id="fileIn" accept=".csv,.bin,text/csv" class="hidden"></label>
+      <button id="startQuick" class="choice"><b>Quick messages</b><span>The 10 ready-made messages TEXT sends with VFO/MR. Change them here.</span></button>
+    </div>
+  </section>
+
+  <section id="work" class="hidden">
+    <div class="panel toolbar">
+      <input type="search" id="search" placeholder="Search name, frequency or notes" aria-label="Search channels">
+      <button id="addCh" class="primary">Add channel</button>
+      <button id="newBand">New band</button>
+    </div>
+    <details class="panel help">
+      <summary>How bands work</summary>
+      <ul>
+        <li>A band is a set of channels, like Weather or Air. On the radio, press <b>Band</b> to pick one, then hold <b>#</b> to scan it. <b>ALL</b> is always there and scans every channel.</li>
+        <li>A scan covers the band's channels that have <b>Scan</b> ticked. Tick a band's bar to tick all of its channels.</li>
+        <li><b>New band</b> makes a band, up to 16. Use <b>Add channel</b> on a band's bar to add a channel to it, <b>Edit</b> to rename it, and <b>Delete</b> to remove it.</li>
+        <li>A channel can be in more than one band, so it shows under each one. Click a channel to change its bands. <b>✕</b> deletes the channel.</li>
+        <li>Nothing changes on the radio until you click <b>Write to radio</b>.</li>
+      </ul>
+    </details>
+    <div id="sections"></div>
+    <div id="noMatch" class="panel hidden muted">No channels match.</div>
+  </section>
+</main>
+
+<div class="bar">
+  <span id="tally"></span>
+  <progress id="prog" class="hidden" max="100" value="0"></progress>
+  <span class="spacer"></span>
+  <button id="saveCsv" disabled>Save to file</button>
+  <button id="uploadBtn" class="primary" disabled>Write to radio</button>
+</div>
+
+<dialog id="editDlg" aria-labelledby="editTitle">
+  <h2 id="editTitle">Edit channel</h2>
+  <div class="grid">
+    <label>Channel number <input type="number" id="fNum" min="1" max="1000"></label>
+    <label>Name (up to 12 characters) <input type="text" id="fName" maxlength="12"></label>
+    <label>Receive MHz <input type="text" id="fFreq" inputmode="decimal"></label>
+    <label>Transmit
+      <select id="fDuplex"><option value="">Same as receive</option><option value="off">Receive only</option><option value="+">Repeater, offset up (+)</option><option value="-">Repeater, offset down (-)</option></select>
+    </label>
+    <label id="offsetRow">Offset MHz <input type="text" id="fOffset" inputmode="decimal"></label>
+    <label>TX tone <select id="fTx"></select></label>
+    <label>RX tone <select id="fRx"></select></label>
+    <label>Bandwidth
+      <select id="fMode"><option value="FM">Wide</option><option value="NFM">Narrow</option></select>
+    </label>
+    <label>Power
+      <select id="fPower"><option value="0">High</option><option value="2">Mid</option><option value="1">Low</option></select>
+    </label>
+    <label class="check"><input type="checkbox" id="fScan"> Scan this channel</label>
+    <fieldset class="wide"><legend>Bands this channel is in</legend><div id="fBands"></div></fieldset>
+    <label class="wide">Notes (kept in the saved file, not on the radio) <input type="text" id="fNote"></label>
+  </div>
+  <p class="muted">Tones: a repeater usually needs only a TX tone. To filter out everyone but your own radios, set both to the same tone on every radio.</p>
+  <p id="formErr" class="formErr" role="alert"></p>
+  <div class="actions">
+    <button id="delBtn" class="danger">Delete channel</button>
+    <button id="cancelBtn">Cancel</button>
+    <button id="okBtn" class="primary">Done</button>
+  </div>
+</dialog>
+
+<dialog id="bandDlg" aria-labelledby="bandTitle">
+  <h2 id="bandTitle">New band</h2>
+  <div class="grid">
+    <label>Name on the Band menu (up to 16) <input type="text" id="bName" maxlength="16" placeholder="WEATHER"></label>
+    <label>Short name on the main screen (up to 5) <input type="text" id="bShort" maxlength="5" placeholder="WX"></label>
+  </div>
+  <p id="bandErr" class="formErr" role="alert"></p>
+  <div class="actions">
+    <button id="bandCancel">Cancel</button>
+    <button id="bandOk" class="primary">Save band</button>
+  </div>
+</dialog>
+
+<dialog id="bandDelDlg" aria-labelledby="bandDelTitle">
+  <h2 id="bandDelTitle">Delete band?</h2>
+  <p id="bandDelText" style="margin:0"></p>
+  <div class="actions">
+    <button id="bandDelCancel">Cancel</button>
+    <button id="bandDelKeep">Delete band, keep channels</button>
+    <button id="bandDelAll" class="primary">Delete band and channels</button>
+  </div>
+</dialog>
+
+<dialog id="quickDlg" aria-labelledby="quickTitle">
+  <h2 id="quickTitle">Quick messages</h2>
+  <p class="muted" style="margin:0 0 10px">In <b>TEXT</b>, press <b>VFO/MR</b> to see these. Pick one with Up/Down or its number, then press <b>Menu</b> to send it, or <b>#</b> to change it first. Up to 50 characters each; letters become capitals. The list on the radio shows the first 29 characters and the whole message below it.</p>
+  <ol id="qList"></ol>
+  <p id="quickInfo" class="muted" style="margin:6px 0 0"></p>
+  <p id="quickErr" class="formErr" role="alert"></p>
+  <div class="actions">
+    <button id="qDefaults" class="danger">Use built-in messages</button>
+    <button id="qClose">Close</button>
+    <button id="qRead">Read from radio</button>
+    <button id="qWrite" class="primary">Write to radio</button>
+  </div>
+</dialog>
+
+<dialog id="confirmDlg" aria-labelledby="confirmTitle">
+  <h2 id="confirmTitle">Write to radio?</h2>
+  <p id="confirmText" style="margin:0"></p>
+  <ul id="diffList"></ul>
+  <p class="muted" style="margin:0">A backup of the radio's channels downloads first. The radio restarts when it finishes. Don't unplug it until this page says it's done.</p>
+  <div class="actions">
+    <button id="confirmNo">Cancel</button>
+    <button id="confirmYes" class="primary">Write</button>
+  </div>
+</dialog>
+
+<script>
+const BUILTIN_CSV = __CSV__;
+const DCS_CODES = __DCS__;
+const CTCSS_CODES = __CTCSS__;
+const MAX_CHANNELS = 1000, REC = 32, SECTOR_CH = 128;
+// Band records sit in the spare slots after the last channel; the firmware reads them from there.
+const BAND_SLOT = 1000, MAX_BANDS = 16, BAND_MARK = 0x42, RECORDS = BAND_SLOT + MAX_BANDS, TABLE_BYTES = RECORDS * REC;
+const OLD_TABLE_BYTES = MAX_CHANNELS * REC;
+const REQUIRED = ["Location", "Name", "Frequency", "Duplex", "Offset", "Tone", "rToneFreq", "cToneFreq", "DtcsCode", "DtcsPolarity", "RxDtcsCode", "Mode", "Skip", "Power", "Comment"];
+const CSV_HEADER = ["Location", "Name", "Frequency", "Duplex", "Offset", "Tone", "rToneFreq", "cToneFreq", "DtcsCode", "DtcsPolarity", "RxDtcsCode", "CrossMode", "Mode", "TStep", "Skip", "Power", "Comment", "URCALL", "RPT1CALL", "RPT2CALL", "DVCODE"];
+// Transmit plan built into the firmware. Outside it the radio shows TX PROHIBITED.
+const TX_PLAN = [[144e6, 148e6], [222e6, 225e6], [420e6, 450e6], [462.55e6, 462.725e6], [467.55e6, 467.725e6], [151.82e6, 151.94e6], [154.57e6, 154.6e6]];
+// The bands the radio used to have built in, by channel number. Used for lists that don't carry
+// bands yet: the Clark County list, and radios that haven't been written from this page.
+const CLARK_BANDS = [
+  { name: "WEATHER", short: "WX", ranges: [[1, 7]] },
+  { name: "POLICE FIRE EMS", short: "PD/FD", ranges: [[14, 105]] },
+  { name: "FED & GOV", short: "FED", ranges: [[106, 146]] },
+  { name: "UTILITIES", short: "UTIL", ranges: [[147, 157]] },
+  { name: "RAILROAD", short: "RAIL", ranges: [[158, 167]] },
+  { name: "AIR TRAFFIC", short: "AIR", ranges: [[168, 233]] },
+  { name: "REPEATERS", short: "RPT", ranges: [[234, 304], [327, 344]] },
+  { name: "FRS", short: "FRS", ranges: [[305, 326]] },
+  { name: "GMRS", short: "GMRS", ranges: [[305, 344]] },
+  { name: "MURS", short: "MURS", ranges: [[345, 349]] },
+  { name: "FRS GMRS MURS", short: "F/G/M", ranges: [[305, 349]] },
+];
+const clarkBands = () => CLARK_BANDS.map(b => ({ name: b.name, short: b.short }));
+const clarkMask = num => CLARK_BANDS.reduce((m, b, i) => b.ranges.some(([a, z]) => num >= a && num <= z) ? m | 1 << i : m, 0);
+
+/* ---------- tones: the radio stores one code for RX and one for TX ----------
+   0 = off, 1-105 = DCS normal, 106-210 = DCS inverted, above 250 = CTCSS in tenths of a Hz. */
+const isDcs = v => v >= 1 && v <= 210, isTone = v => v > 250;
+function toneCode(hz) { return Math.round(parseFloat(hz) * 10); }
+function dcsCode(code, pol) {
+  const i = DCS_CODES.indexOf(String(code).padStart(3, "0"));
+  if (i < 0) throw new Error(`DCS code ${code} isn't a standard code.`);
+  return i + 1 + (pol === "R" ? 105 : 0);
+}
+const dcsParts = v => { const inv = v > 105; return [DCS_CODES[(inv ? v - 105 : v) - 1], inv ? "R" : "N"]; };
+function toneText(v) {
+  if (!v) return "OFF";
+  if (isTone(v)) return (v / 10).toFixed(1);
+  if (isDcs(v)) { const [c, p] = dcsParts(v); return "D" + c + (p === "R" ? "I" : "N"); }
+  return "?";
+}
+function toneLabel(c) {
+  const { rxc, txc } = c;
+  if (!rxc && !txc) return "-";
+  if (rxc === txc) return toneText(txc);
+  if (!rxc) return "TX " + toneText(txc);
+  if (!txc) return "RX " + toneText(rxc);
+  return "TX " + toneText(txc) + ", RX " + toneText(rxc);
+}
+
+/* CHIRP-style tone columns <-> the radio's two codes. */
+function codesFromCsv(get) {
+  const tone = get("Tone"), pol = (get("DtcsPolarity") || "NN").padEnd(2, "N");
+  const hz = col => { const v = parseFloat(get(col)); if (!(v >= 60 && v <= 260)) throw new Error(`tone "${get(col)}" must be 60-260 Hz, like 100.0`); return toneCode(get(col)); };
+  if (!tone) return [0, 0];
+  if (tone === "Tone") return [0, hz("rToneFreq")];
+  if (tone === "TSQL") { const v = hz("cToneFreq"); return [v, v]; }
+  if (tone === "DTCS") return [dcsCode(get("RxDtcsCode") || get("DtcsCode"), pol[1]), dcsCode(get("DtcsCode"), pol[0])];
+  if (tone === "Cross") {
+    const [tx, rx] = (get("CrossMode") || "Tone->Tone").split("->");
+    const txc = tx === "Tone" ? hz("rToneFreq") : tx === "DTCS" ? dcsCode(get("DtcsCode"), pol[0]) : 0;
+    const rxc = rx === "Tone" ? hz("cToneFreq") : rx === "DTCS" ? dcsCode(get("RxDtcsCode"), pol[1]) : 0;
+    return [rxc, txc];
+  }
+  throw new Error(`tone type "${tone}" isn't supported`);
+}
+
+function csvToneFields(rxc, txc) {
+  const f = { Tone: "", rToneFreq: "88.5", cToneFreq: "88.5", DtcsCode: "023", DtcsPolarity: "NN", RxDtcsCode: "023", CrossMode: "Tone->Tone" };
+  const kind = v => !v ? "" : isDcs(v) ? "DTCS" : isTone(v) ? "Tone" : "?";
+  const tk = kind(txc), rk = kind(rxc);
+  if (tk === "?" || rk === "?") return null;
+  let tp = "N", rp = "N";
+  if (tk === "DTCS") { const [c, p] = dcsParts(txc); f.DtcsCode = c; tp = p; }
+  if (rk === "DTCS") { const [c, p] = dcsParts(rxc); f.RxDtcsCode = c; rp = p; }
+  if (tk === "Tone") f.rToneFreq = (txc / 10).toFixed(1);
+  if (rk === "Tone") f.cToneFreq = (rxc / 10).toFixed(1);
+  f.DtcsPolarity = tp + rp;
+  if (!tk && !rk) return f;
+  if (tk === "Tone" && !rk) { f.Tone = "Tone"; return f; }
+  if (tk === "Tone" && rk === "Tone" && txc === rxc) { f.Tone = "TSQL"; f.cToneFreq = f.rToneFreq; return f; }
+  if (tk === "DTCS" && rk === "DTCS" && f.DtcsCode === f.RxDtcsCode) { f.Tone = "DTCS"; return f; }
+  f.Tone = "Cross"; f.CrossMode = tk + "->" + rk;
+  return f;
+}
+
+/* ---------- CSV (raw fields kept so unedited rows save byte for byte) ---------- */
+function parseCsv(text) {
+  const bom = text.charCodeAt(0) === 0xFEFF ? "﻿" : "";
+  const s = bom ? text.slice(1) : text;
+  const rows = [];
+  let fields = [], start = 0, quoted = false;
+  for (let i = 0; i < s.length; i++) {
+    const ch = s[i];
+    if (ch === '"') quoted = !quoted;
+    else if (!quoted && ch === ",") { fields.push(s.slice(start, i)); start = i + 1; }
+    else if (!quoted && ch === "\n") {
+      const end = s[i - 1] === "\r" && i - 1 >= start ? i - 1 : i;
+      fields.push(s.slice(start, end));
+      rows.push({ fields, eol: s.slice(end, i + 1) });
+      fields = []; start = i + 1;
+    }
+  }
+  if (start < s.length || fields.length) { fields.push(s.slice(start)); rows.push({ fields, eol: "" }); }
+  return { bom, rows };
+}
+const unquote = raw => raw.length > 1 && raw[0] === '"' && raw[raw.length - 1] === '"' ? raw.slice(1, -1).replace(/""/g, '"') : raw;
+const quote = v => /[",\r\n]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v;
+
+/* A saved file carries bands in two extra columns: Bands lists each channel's band names, and the
+   first row's BandList holds every band as NAME=SHORT, in order. Files without them get the
+   Clark County bands by channel number. */
+function channelsFromCsv(text) {
+  const parsed = parseCsv(text);
+  if (!parsed.rows.length) throw new Error("That file is empty.");
+  const header = parsed.rows[0].fields.map(unquote);
+  const col = Object.fromEntries(header.map((h, i) => [h, i]));
+  const missing = REQUIRED.filter(h => !(h in col));
+  if (missing.length) throw new Error("That doesn't look like a channel list. It's missing these columns: " + missing.join(", ") + ".");
+  const chans = [], seen = new Set(), bandNames = [];
+  let bandList = null;
+  parsed.rows.slice(1).forEach((row, i) => {
+    if (row.fields.length === 1 && !row.fields[0].trim()) return;
+    const get = h => h in col ? unquote(row.fields[col[h]] ?? "") : "";
+    const num = Number(get("Location"));
+    if (!Number.isInteger(num) || num < 1 || num > MAX_CHANNELS) throw new Error(`Line ${i + 2}: channel number "${get("Location")}" isn't 1 to ${MAX_CHANNELS}.`);
+    if (seen.has(num)) throw new Error(`Channel ${num} appears twice in that file.`);
+    seen.add(num);
+    let codes;
+    try { codes = codesFromCsv(get); } catch (e) { throw new Error(`Line ${i + 2}: ${e.message.replace(/\.$/, "")}.`); }
+    if (get("BandList") && !bandList) bandList = get("BandList");
+    const names = get("Bands").split("|").map(s => s.trim()).filter(Boolean);
+    names.forEach(n => { if (!bandNames.includes(n)) bandNames.push(n); });
+    chans.push({
+      num, name: get("Name"), freq: get("Frequency"), duplex: get("Duplex"), offset: get("Offset"), rxc: codes[0], txc: codes[1],
+      mode: get("Mode"), skip: get("Skip"), powerRaw: powerRawFromText(get("Power")), powerText: get("Power"), note: get("Comment"),
+      bandNames: names, extra: null, csvRow: row,
+    });
+  });
+  if (!chans.length) throw new Error("That file has no channels.");
+  let bands, fromFile = "Bands" in col;
+  if (fromFile) {
+    bands = bandList ? bandList.split("|").filter(Boolean).map(s => { const [name, short] = s.split("="); return { name: name.trim(), short: (short || name).trim().slice(0, 5) }; })
+      : bandNames.map(n => ({ name: n, short: n.slice(0, 5) }));
+    for (const n of bandNames) if (!bands.some(b => b.name === n)) bands.push({ name: n, short: n.slice(0, 5) });
+    if (bands.length > MAX_BANDS) throw new Error(`That file has ${bands.length} bands, but the radio holds ${MAX_BANDS}.`);
+    for (const c of chans) c.bands = c.bandNames.reduce((m, n) => m | 1 << bands.findIndex(b => b.name === n), 0);
+  } else {
+    bands = clarkBands();
+    for (const c of chans) c.bands = clarkMask(c.num);
+  }
+  for (const c of chans) { c.fileBands = c.bands; delete c.bandNames; }
+  return { parsed, col, chans, bands, fromFile };
+}
+
+function powerRawFromText(t) {
+  const w = parseFloat(t);
+  if (!Number.isFinite(w)) return 2;
+  return w > 6 ? 0 : w > 2 ? 2 : 1;
+}
+
+/* ---------- 32-byte channel record: same layout CHIRP wrote and the firmware reads ---------- */
+const to10Hz = mhz => Math.round(parseFloat(mhz) * 1e5);
+function bcdBytes(v10hz) {
+  const s = String(v10hz).padStart(8, "0");
+  return [s.slice(6, 8), s.slice(4, 6), s.slice(2, 4), s.slice(0, 2)].map(p => parseInt(p, 16));
+}
+const fromBcd = (b, o) => { let v = 0; for (let i = 3; i >= 0; i--) v = v * 100 + (b[o + i] >> 4) * 10 + (b[o + i] & 15); return v; };
+const isAirband = mhz => { const v = to10Hz(mhz); return v >= 10800000 && v <= 13600000; };
+
+function encode(c) {
+  const b = new Uint8Array(REC).fill(0xFF);
+  const rx = to10Hz(c.freq);
+  b.set(bcdBytes(rx), 0);
+  if (c.duplex !== "off") {
+    const off = to10Hz(c.offset || "0");
+    b.set(bcdBytes(c.duplex === "+" ? rx + off : c.duplex === "-" ? rx - off : rx), 4);
+  }
+  const rxc = c.rxc || 0, txc = c.txc || 0;
+  b[8] = rxc & 255; b[9] = rxc >> 8; b[10] = txc & 255; b[11] = txc >> 8;
+  const x = c.extra || {};
+  b[12] = x.group ?? 0;
+  b[13] = x.ptt ?? 0;
+  b[14] = c.powerRaw;
+  b[15] = ((x.flags ?? 0) & ~0x44) | (c.skip === "S" ? 0 : 0x04) | (c.mode === "NFM" ? 0x40 : 0);
+  if (x.decoder) b.set(x.decoder, 16);
+  // Bytes 17-18: which bands the channel is in, one bit per band.
+  const mask = c.bands || 0;
+  b[17] = mask & 255; b[18] = mask >> 8;
+  const name = (c.name || "").slice(0, 12);
+  for (let i = 0; i < name.length; i++) {
+    const code = name.charCodeAt(i);
+    if (code < 32 || code > 126) throw new Error(`Channel ${c.num}: the name can only use plain keyboard characters.`);
+    b[20 + i] = code;
+  }
+  return b;
+}
+
+const isBlank = (t, n) => { for (let i = 0; i < REC; i++) if (t[n * REC + i] !== 0xFF) return false; return true; };
+
+function decode(t, n) {
+  const r = t.subarray(n * REC, (n + 1) * REC);
+  const rx = fromBcd(r, 0), rxOnly = r[4] === 0xFF && r[5] === 0xFF && r[6] === 0xFF && r[7] === 0xFF;
+  const tx = rxOnly ? rx : fromBcd(r, 4);
+  const mhz = v => (v / 1e5).toFixed(6);
+  const nameBytes = [];
+  for (let i = 20; i < 32 && r[i] !== 0xFF && r[i] !== 0; i++) nameBytes.push(r[i]);
+  return {
+    num: n + 1, name: String.fromCharCode(...nameBytes), freq: mhz(rx),
+    duplex: rxOnly ? "off" : tx === rx ? "" : tx > rx ? "+" : "-", offset: mhz(rxOnly ? 0 : Math.abs(tx - rx)),
+    rxc: r[8] | r[9] << 8, txc: r[10] | r[11] << 8,
+    mode: rx >= 10800000 && rx <= 13600000 ? "AM" : r[15] & 0x40 ? "NFM" : "FM",
+    skip: r[15] & 0x04 ? "" : "S", powerRaw: r[14], powerText: "", note: "",
+    bands: r[17] | r[18] << 8,
+    extra: { group: r[12], ptt: r[13], flags: r[15], decoder: r.slice(16, 20) }, csvRow: null,
+  };
+}
+
+/* Band record: name in bytes 0-15, short name in 16-20, BAND_MARK in byte 31. */
+function encodeBand(b) {
+  const r = new Uint8Array(REC).fill(0xFF);
+  for (let i = 0; i < b.name.length && i < 16; i++) r[i] = b.name.charCodeAt(i);
+  for (let i = 0; i < b.short.length && i < 5; i++) r[16 + i] = b.short.charCodeAt(i);
+  r[31] = BAND_MARK;
+  return r;
+}
+function decodeBands(t) {
+  const out = [];
+  if (t.length < TABLE_BYTES) return out;
+  const text = (r, a, z) => { let s = ""; for (let i = a; i < z && r[i] !== 0xFF && r[i] !== 0; i++) s += String.fromCharCode(r[i]); return s; };
+  for (let i = 0; i < MAX_BANDS; i++) {
+    const r = t.subarray((BAND_SLOT + i) * REC, (BAND_SLOT + i + 1) * REC);
+    if (r[31] !== BAND_MARK) break;
+    out.push({ name: text(r, 0, 16), short: text(r, 16, 21) });
+  }
+  return out;
+}
+
+function buildTable(list, bandList) {
+  const t = new Uint8Array(TABLE_BYTES).fill(0xFF);
+  for (const c of list) t.set(encode(c), (c.num - 1) * REC);
+  (bandList || []).forEach((b, i) => t.set(encodeBand(b), (BAND_SLOT + i) * REC));
+  return t;
+}
+
+/* Turns a radio table into a list. A channel that matches the reference list exactly keeps that
+   entry (with its notes and saved-file text); otherwise notes carry over when name and frequency
+   match. A radio with no bands on it yet gets the Clark County bands by channel number. */
+function channelsFromTable(t, ref) {
+  let bandList = decodeBands(t);
+  const defaulted = !bandList.length;
+  if (defaulted) bandList = clarkBands();
+  const refByNum = new Map(ref.map(c => [c.num, c]));
+  const out = [];
+  for (let n = 0; n < MAX_CHANNELS; n++) {
+    if (isBlank(t, n)) continue;
+    const old = refByNum.get(n + 1);
+    const c = decode(t, n);
+    if (defaulted) c.bands = clarkMask(n + 1);
+    if (old) {
+      let same = false;
+      try { same = sameBytes(encode({ ...old, bands: c.bands }), t.subarray(n * REC, (n + 1) * REC)) && (defaulted || old.bands === c.bands); } catch (e) {}
+      if (same) { old.bands = c.bands; out.push(old); continue; }
+      if (old.name === c.name && to10Hz(old.freq) === to10Hz(c.freq)) c.note = old.note;
+    }
+    c.edited = true;
+    out.push(c);
+  }
+  return { list: out, bands: bandList, defaulted };
+}
+
+function validate(c) {
+  const hz = parseFloat(c.freq) * 1e6;
+  if (!Number.isFinite(hz) || !((hz >= 16e6 && hz <= 560e6) || (hz >= 740e6 && hz <= 1120e6))) return `Channel ${c.num}: receive frequency must be within 16-560 or 740-1120 MHz.`;
+  if (c.duplex === "+" || c.duplex === "-") {
+    const off = parseFloat(c.offset);
+    if (!Number.isFinite(off) || off <= 0 || off > 100) return `Channel ${c.num}: enter an offset in MHz, like 0.6.`;
+  }
+  for (const v of [c.rxc || 0, c.txc || 0]) if (v && !isDcs(v) && !isTone(v)) return `Channel ${c.num}: has a tone the radio doesn't recognize. Pick one from the list.`;
+  if (!/^[\x20-\x7E]{0,12}$/.test(c.name || "")) return `Channel ${c.num}: names are up to 12 plain keyboard characters.`;
+  return null;
+}
+
+function txHz(c) {
+  if (c.duplex === "off") return null;
+  const rx = to10Hz(c.freq), off = to10Hz(c.offset || "0");
+  return (c.duplex === "+" ? rx + off : c.duplex === "-" ? rx - off : rx) * 10;
+}
+const txAllowed = c => { const hz = txHz(c); return hz === null || TX_PLAN.some(([a, b]) => hz >= a && hz <= b); };
+
+function fmtFreq(mhz) { const s = parseFloat(mhz).toFixed(4); return s.endsWith("0") ? s.slice(0, -1) : s; }
+const POWER_NAMES = { 0: "High", 1: "Low", 2: "Mid" };
+const MODE_NAMES = { FM: "Wide", NFM: "Narrow", AM: "AM" };
+
+/* ---------- radio link: frames match the firmware's programming protocol ---------- */
+const HANDSHAKE = new TextEncoder().encode("PROGRAMBF-5RH");
+const F_HEADER = 0xA6, CMD_READ = 0x52, CMD_WRITE = 0x57, CMD_END = 0x45, CMD_ERROR = 0xEE;
+
+function crc16(data, init = 0) {
+  let crc = init;
+  for (const byte of data) {
+    crc ^= byte << 8;
+    for (let i = 0; i < 8; i++) crc = crc & 0x8000 ? ((crc << 1) ^ 0x1021) & 0xFFFF : (crc << 1) & 0xFFFF;
+  }
+  return crc;
+}
+
+function makeFrame(cmd, addr, data = new Uint8Array(0)) {
+  const body = new Uint8Array(5 + data.length);
+  body[0] = cmd; body[1] = addr >> 8; body[2] = addr & 255; body[3] = data.length >> 8; body[4] = data.length & 255;
+  body.set(data, 5);
+  const crc = crc16(body);
+  const f = new Uint8Array(body.length + 3);
+  f[0] = F_HEADER; f.set(body, 1); f[f.length - 2] = crc >> 8; f[f.length - 1] = crc & 255;
+  return f;
+}
+
+class Link {
+  constructor(port) { this.port = port; this.buf = []; this.closed = false; this.waiter = null; }
+
+  async open() {
+    await this.port.open({ baudRate: 115200 });
+    if (this.port.setSignals) await this.port.setSignals({ dataTerminalReady: true, requestToSend: true }).catch(() => {});
+    this.writer = this.port.writable.getWriter();
+    this.reader = this.port.readable.getReader();
+    this.pump = (async () => {
+      try {
+        while (true) {
+          const { value, done } = await this.reader.read();
+          if (done) break;
+          for (const b of value) this.buf.push(b);
+          if (this.waiter) { this.waiter(); this.waiter = null; }
+        }
+      } catch (e) { /* port closed */ }
+      this.closed = true;
+      if (this.waiter) { this.waiter(); this.waiter = null; }
+    })();
+  }
+
+  async close() {
+    try { await this.reader.cancel(); } catch (e) {}
+    await this.pump;
+    try { this.reader.releaseLock(); } catch (e) {}
+    try { await this.writer.close(); } catch (e) {}
+    try { this.writer.releaseLock(); } catch (e) {}
+    try { await this.port.close(); } catch (e) {}
+  }
+
+  async take(n, deadline) {
+    while (this.buf.length < n) {
+      const left = deadline - performance.now();
+      if (left <= 0 || this.closed) return null;
+      await new Promise(res => {
+        const t = setTimeout(res, left);
+        this.waiter = () => { clearTimeout(t); res(); };
+      });
+    }
+    return this.buf.splice(0, n);
+  }
+
+  async handshake(attempts = 10) {
+    for (let i = 0; i < attempts; i++) {
+      this.buf.length = 0;
+      await this.writer.write(HANDSHAKE);
+      const r = await this.take(1, performance.now() + 1000);
+      if (r && r[0] === 0x06) return;
+    }
+    throw new Error("The radio didn't answer. Make sure it's on at its main screen and the cable is pushed fully in.");
+  }
+
+  async recvFrame(deadline) {
+    while (true) {
+      const h = await this.take(1, deadline);
+      if (!h) return null;
+      if (h[0] === F_HEADER) break;
+    }
+    const head = await this.take(5, deadline);
+    if (!head) return null;
+    const n = head[3] << 8 | head[4];
+    const data = n ? await this.take(n, deadline) : [];
+    if (!data) return null;
+    const tail = await this.take(2, deadline);
+    if (!tail) return null;
+    if ((tail[0] << 8 | tail[1]) !== crc16([...head, ...data])) return null;
+    return { cmd: head[0], addr: head[1] << 8 | head[2], data: Uint8Array.from(data) };
+  }
+
+  async send(cmd, addr, data, timeoutMs = 2000) {
+    const frame = makeFrame(cmd, addr, data);
+    for (let i = 0; i < 5; i++) {
+      this.buf.length = 0;
+      await this.writer.write(frame);
+      const r = await this.recvFrame(performance.now() + timeoutMs);
+      if (!r) continue;
+      if (r.cmd === CMD_ERROR) { const e = new Error(`The radio refused a command (error ${r.data[0]}).`); e.refused = true; throw e; }
+      if (r.cmd !== cmd || r.addr !== addr) continue;
+      return r;
+    }
+    throw new Error("Lost contact with the radio. Check the cable and try again.");
+  }
+
+  async readChannels(onProgress) {
+    const t = new Uint8Array(TABLE_BYTES);
+    for (let n = 0; n < RECORDS; n++) {
+      let r;
+      try { r = await this.send(CMD_READ, n * REC); }
+      catch (e) {
+        if (e.refused && n === BAND_SLOT) throw new Error("This radio's firmware is too old for bands. Flash UV-5RM_Custom_Firmware.BF from this repo first (see the README), then try again.");
+        throw e;
+      }
+      if (r.data.length !== REC) throw new Error("The radio sent an unexpected reply.");
+      t.set(r.data, n * REC);
+      if (onProgress && n % 8 === 0) onProgress(n / RECORDS);
+    }
+    return t;
+  }
+
+  async readSector(s) {
+    const count = Math.min(SECTOR_CH, RECORDS - s * SECTOR_CH);
+    const t = new Uint8Array(count * REC);
+    for (let i = 0; i < count; i++) {
+      const r = await this.send(CMD_READ, (s * SECTOR_CH + i) * REC);
+      t.set(r.data, i * REC);
+    }
+    return t;
+  }
+
+  async end() {
+    try { await this.send(CMD_END, 0); } catch (e) { /* radio may reset before replying */ }
+  }
+}
+
+/* The first write to a sector erases all 128 records in it, so a touched sector is always
+   rewritten whole, in one session, from a fresh read. */
+const SECTORS = Math.ceil(RECORDS / SECTOR_CH);
+function touchedSectors(current, target) {
+  const out = [];
+  for (let s = 0; s < SECTORS; s++) {
+    const a = s * SECTOR_CH * REC, b = Math.min(a + SECTOR_CH * REC, TABLE_BYTES);
+    for (let i = a; i < b; i++) if (current[i] !== target[i]) { out.push(s); break; }
+  }
+  return out;
+}
+
+function sameBytes(a, b) { if (a.length !== b.length) return false; for (let i = 0; i < a.length; i++) if (a[i] !== b[i]) return false; return true; }
+
+async function writeSectors(link, target, sectors, onProgress) {
+  let done = 0;
+  const total = sectors.length * SECTOR_CH * 2;
+  for (const s of sectors) {
+    for (let i = 0; i < SECTOR_CH; i++) {
+      const n = s * SECTOR_CH + i;
+      if (n >= RECORDS) break;
+      await link.send(CMD_WRITE, n * REC, target.subarray(n * REC, (n + 1) * REC));
+      done++;
+      if (onProgress && i % 4 === 0) onProgress(done / total);
+    }
+  }
+  const bad = [];
+  for (const s of sectors) {
+    const back = await link.readSector(s);
+    const want = target.subarray(s * SECTOR_CH * REC, s * SECTOR_CH * REC + back.length);
+    if (!sameBytes(back, want)) bad.push(s);
+    done += SECTOR_CH;
+    if (onProgress) onProgress(done / total);
+  }
+  return bad;
+}
+
+/* ---------- app state ---------- */
+const $ = id => document.getElementById(id);
+let chans = [], bands = [], csvBase = null, sourceName = "", dirty = false, radioTable = null, busy = false, port = null, editing = null, loaded = false;
+const serialOk = "serial" in navigator;
+
+function setNotice(msg, kind, undo) {
+  const n = $("notice"); n.textContent = msg; n.className = kind || "";
+  if (undo) { const b = document.createElement("button"); b.id = "undoBtn"; b.textContent = "Undo"; b.addEventListener("click", undo); n.append(b); }
+  placeLogo();
+}
+function setDirty(v) { dirty = v; $("source").textContent = sourceName ? "Editing: " + sourceName + (dirty ? " (not saved or written yet)" : "") : ""; }
+function setBusy(v) {
+  busy = v;
+  for (const id of ["uploadBtn", "saveCsv", "addCh", "newBand", "changeList", "startRadio", "startBuiltin", "quickBtn", "startQuick", "qRead", "qWrite", "qDefaults", "qClose"]) $(id).disabled = v || (!loaded && (id === "uploadBtn" || id === "saveCsv"));
+  if (!serialOk) $("uploadBtn").disabled = $("startRadio").disabled = $("qRead").disabled = $("qWrite").disabled = true;
+  $("prog").classList.toggle("hidden", !v); if (!v) $("prog").value = 0;
+}
+const progress = f => { $("prog").value = Math.round(f * 100); };
+
+function showList(list, bandList, base, label, opts = {}) {
+  chans = list; bands = bandList; csvBase = base; sourceName = label; radioTable = opts.radio || null; loaded = true;
+  $("start").classList.add("hidden"); $("work").classList.remove("hidden"); $("changeList").classList.remove("hidden");
+  $("search").value = "";
+  setDirty(!!opts.dirty);
+  setBusy(busy);
+  render();
+  placeLogo();
+}
+
+function showStart() {
+  loaded = false; chans = []; bands = []; csvBase = null; sourceName = ""; radioTable = null;
+  $("start").classList.remove("hidden"); $("work").classList.add("hidden"); $("changeList").classList.add("hidden");
+  $("tally").textContent = "";
+  setDirty(false); setBusy(busy);
+  placeLogo();
+}
+
+function placeLogo() {
+  const top = loaded ? 72 : Math.round($("start").getBoundingClientRect().bottom + 16);
+  document.body.style.setProperty("--logo-top", top + "px");
+}
+
+function channelDiff(c) {
+  if (!radioTable) return null;
+  try {
+    const a = encode(c), n = c.num - 1;
+    if (isBlank(radioTable, n)) return "new";
+    for (let i = 0; i < REC; i++) if (a[i] !== radioTable[n * REC + i]) return "changed";
+  } catch (e) { return "changed"; }
+  return null;
+}
+
+function matches(c) {
+  const q = $("search").value.trim().toLowerCase();
+  if (!q) return true;
+  return (c.num + " " + c.name + " " + fmtFreq(c.freq) + " " + (c.note || "")).toLowerCase().includes(q);
+}
+
+/* Edits go through here so the row's original CSV text is only replaced when it really changes. */
+function setField(c, patch) { Object.assign(c, patch); c.edited = true; }
+
+function setScan(list, on) {
+  for (const c of list) if ((c.skip !== "S") !== on) setField(c, { skip: on ? "" : "S" });
+  setDirty(true); render();
+}
+
+function snapshot() {
+  const s = { chans: chans.slice(), bands: bands.map(b => ({ ...b })), masks: chans.map(c => [c, c.bands, c.edited]) };
+  return () => { chans = s.chans; bands = s.bands; for (const [c, m, e] of s.masks) { c.bands = m; c.edited = e; } setDirty(true); render(); setNotice("Undone.", "ok"); };
+}
+
+/* ---------- rendering ---------- */
+const openSecs = new Set();
+function render() {
+  const host = $("sections");
+  host.textContent = "";
+  const searching = !!$("search").value.trim();
+  let any = false;
+  const sections = bands.map((b, i) => ({ key: "b" + i + b.name, band: b, index: i, list: chans.filter(c => c.bands >> i & 1) }));
+  const loose = chans.filter(c => !(c.bands & (1 << bands.length) - 1));
+  if (loose.length) sections.push({ key: "none", band: null, index: -1, list: loose });
+  for (const sec of sections) {
+    sec.list.sort((a, b) => a.num - b.num);
+    const shown = sec.list.filter(matches);
+    if (!shown.length && (searching || sec.list.length)) continue;
+    any = true;
+    const d = document.createElement("details");
+    d.className = "sec" + (sec.band ? "" : " nob");
+    d.open = openSecs.has(sec.key) || searching || !sec.list.length;
+    d.addEventListener("toggle", () => { if (!searching) d.open ? openSecs.add(sec.key) : openSecs.delete(sec.key); });
+    const sum = document.createElement("summary");
+    const box = document.createElement("input");
+    box.type = "checkbox";
+    const on = shown.filter(c => c.skip !== "S").length;
+    box.checked = shown.length > 0 && on === shown.length;
+    box.indeterminate = on > 0 && on < shown.length;
+    box.disabled = !shown.length;
+    box.setAttribute("aria-label", "Scan every channel in " + (sec.band ? sec.band.name : "Not in a band"));
+    box.addEventListener("click", e => e.stopPropagation());
+    box.addEventListener("change", () => setScan(shown, box.checked));
+    const title = document.createElement("span"); title.className = "ttl";
+    title.textContent = sec.band ? sec.band.name : "Not in a band";
+    const short = document.createElement("span"); short.className = "short";
+    short.textContent = sec.band ? "Main screen: " + sec.band.short : "Scans only under ALL";
+    const count = document.createElement("span"); count.className = "count";
+    const scanning = sec.list.filter(c => c.skip !== "S").length;
+    const changed = sec.list.filter(c => channelDiff(c)).length;
+    count.textContent = `${sec.list.length} channels, ${scanning} scanned` + (changed ? `, ${changed} not written yet` : "");
+    sum.append(box, title, short, count);
+    if (sec.band) {
+      const acts = document.createElement("span"); acts.className = "acts";
+      for (const [label, fn] of [["Add channel", () => openEditor(null, sec.index)], ["Edit", () => openBandDialog(sec.index)], ["Delete", () => deleteBand(sec.index)]]) {
+        const b = document.createElement("button");
+        b.className = "mini"; b.textContent = label; b.disabled = busy;
+        b.setAttribute("aria-label", `${label} ${label === "Add channel" ? "to " : ""}${sec.band.name}`);
+        b.addEventListener("click", e => { e.preventDefault(); e.stopPropagation(); fn(); });
+        acts.append(b);
+      }
+      sum.append(acts);
+    }
+    d.append(sum);
+    if (!sec.list.length) {
+      const p = document.createElement("div"); p.className = "emptygrp";
+      p.textContent = "No channels yet. Click Add channel on this bar, or click any channel and tick this band.";
+      d.append(p); host.append(d);
+      continue;
+    }
+    const wrap = document.createElement("div"); wrap.className = "tablewrap";
+    const table = document.createElement("table");
+    table.innerHTML = "<thead><tr><th>Scan</th><th>CH</th><th>Name</th><th>RX MHz</th><th>TX MHz</th><th>Tone</th><th>Width</th><th>Power</th><th></th><th>Notes</th><th></th></tr></thead>";
+    const tb = document.createElement("tbody");
+    for (const c of shown) {
+      const tr = document.createElement("tr");
+      const hz = txHz(c);
+      const cells = [["", ""], ["num", String(c.num).padStart(3, "0")], ["nm", c.name], ["num", fmtFreq(c.freq)],
+        ["num", hz === null ? "RX only" : fmtFreq(hz / 1e6)], ["", toneLabel(c)], ["", MODE_NAMES[c.mode] || c.mode], ["", POWER_NAMES[c.powerRaw] ?? "?"], ["tags", ""], ["", c.note || ""], ["del", ""]];
+      cells.forEach(([cls, text]) => { const td = document.createElement("td"); if (cls) td.className = cls; td.textContent = text; tr.append(td); });
+      const cb = document.createElement("input");
+      cb.type = "checkbox"; cb.checked = c.skip !== "S";
+      cb.setAttribute("aria-label", "Scan channel " + c.num);
+      cb.addEventListener("click", e => e.stopPropagation());
+      cb.addEventListener("change", () => setScan([c], cb.checked));
+      tr.children[0].append(cb);
+      tr.children[0].addEventListener("click", e => { if (e.target !== cb) { e.stopPropagation(); cb.click(); } });
+      const flag = channelDiff(c);
+      if (flag) { const t = document.createElement("span"); t.className = "tag"; t.textContent = flag === "new" ? "not on radio" : "not written"; tr.children[8].append(t); }
+      if (!txAllowed(c)) { const t = document.createElement("span"); t.className = "tag warn"; t.textContent = "no TX"; t.title = "Outside the radio's transmit bands, so it will only receive"; tr.children[8].append(" ", t); }
+      const x = document.createElement("button");
+      x.className = "x"; x.textContent = "✕"; x.title = "Delete this channel"; x.disabled = busy;
+      x.setAttribute("aria-label", `Delete channel ${c.num} ${c.name}`);
+      x.addEventListener("click", e => { e.stopPropagation(); deleteChannel(c); });
+      tr.children[10].append(x);
+      tr.addEventListener("click", () => openEditor(c));
+      tb.append(tr);
+    }
+    table.append(tb); wrap.append(table); d.append(wrap); host.append(d);
+  }
+  $("noMatch").classList.toggle("hidden", any || !searching);
+  const scanning = chans.filter(c => c.skip !== "S").length;
+  $("tally").textContent = `${chans.length} channels, ${scanning} scanned, ${bands.length} band${bands.length === 1 ? "" : "s"}`;
+}
+
+/* ---------- bands ---------- */
+let bandEditing = -1;
+function openBandDialog(i) {
+  if (i < 0 && bands.length >= MAX_BANDS) { setNotice(`The radio holds ${MAX_BANDS} bands. Delete one to make room.`, "err"); return; }
+  bandEditing = i;
+  const b = i >= 0 ? bands[i] : { name: "", short: "" };
+  $("bandTitle").textContent = i >= 0 ? `Edit band ${b.name}` : "New band";
+  $("bName").value = b.name; $("bShort").value = b.short; $("bandErr").textContent = "";
+  $("bandDlg").showModal();
+}
+function saveBand() {
+  const name = $("bName").value.trim().toUpperCase(), short = ($("bShort").value.trim() || name.slice(0, 5)).toUpperCase();
+  const err = !name ? "Give the band a name." : !/^[\x20-\x7E]+$/.test(name + short) ? "Use plain keyboard characters only."
+    : bands.some((b, i) => b.name === name && i !== bandEditing) ? `There's already a band called ${name}.` : "";
+  if (err) { $("bandErr").textContent = err; return; }
+  const undo = snapshot();
+  if (bandEditing >= 0) {
+    bands[bandEditing] = { name, short };
+    setNotice(`Saved band ${name}.`, "ok", undo);
+  } else {
+    bands.push({ name, short });
+    openSecs.add("b" + (bands.length - 1) + name);
+    setNotice(`Made band ${name}. Use Add channel on its bar to add channels to it.`, "ok", undo);
+  }
+  $("bandDlg").close();
+  setDirty(true); render();
+  const el = [...document.querySelectorAll("details.sec")].find(d => d.querySelector(".ttl").textContent === name);
+  if (el && el.scrollIntoView) el.scrollIntoView({ block: "center" });
+}
+
+let bandDeleting = -1;
+function deleteBand(i) {
+  const n = chans.filter(c => c.bands >> i & 1).length;
+  bandDeleting = i;
+  if (!n) { finishDeleteBand(true); return; }
+  $("bandDelTitle").textContent = `Delete band ${bands[i].name}?`;
+  $("bandDelText").textContent = `It has ${n} channel${n === 1 ? "" : "s"}. Keep them on the radio (they stay in any other bands, or only scan under ALL), or delete them too.`;
+  $("bandDelAll").textContent = `Delete band and its ${n} channel${n === 1 ? "" : "s"}`;
+  $("bandDelDlg").showModal();
+}
+function finishDeleteBand(keep) {
+  const i = bandDeleting, name = bands[i].name, undo = snapshot();
+  if ($("bandDelDlg").open) $("bandDelDlg").close();
+  const inBand = chans.filter(c => c.bands >> i & 1);
+  if (!keep) chans = chans.filter(c => !(c.bands >> i & 1));
+  // Later bands move down one place, so every channel's band bits shift to match.
+  const low = (1 << i) - 1;
+  for (const c of chans) {
+    const m = (c.bands & low) | ((c.bands >> (i + 1)) << i);
+    if (m !== c.bands) setField(c, { bands: m });
+  }
+  bands.splice(i, 1);
+  setDirty(true); render();
+  setNotice(!inBand.length ? `Deleted band ${name}.` : keep ? `Deleted band ${name}. Its ${inBand.length} channels are still on the radio.` : `Deleted band ${name} and its ${inBand.length} channels. They're removed from the radio when you click Write to radio.`, "", undo);
+}
+
+function deleteChannel(c) {
+  const undo = snapshot();
+  chans = chans.filter(x => x !== c);
+  setDirty(true); render();
+  setNotice(`Deleted channel ${c.num} ${c.name}. It's removed from the radio when you click Write to radio.`, "", undo);
+}
+
+/* ---------- saving ---------- */
+function loadCsvText(text, label) {
+  const r = channelsFromCsv(text);
+  showList(r.chans, r.bands, r, label);
+  return r;
+}
+
+function exportCsv() {
+  const header = csvBase ? csvBase.parsed.rows[0].fields.map(unquote) : CSV_HEADER;
+  const eol = csvBase ? (csvBase.parsed.rows[0].eol || "\r\n") : "\r\n";
+  let headLine = csvBase ? csvBase.parsed.rows[0].fields.join(",") + csvBase.parsed.rows[0].eol : header.join(",") + eol;
+  const crossCol = header.includes("CrossMode");
+  const extra = ["Bands", "BandList"].filter(h => !header.includes(h));
+  const outHeader = [...header, ...extra];
+  if (extra.length) headLine = headLine.replace(/\r?\n?$/, m => "," + extra.join(",") + (m || eol));
+  const bandsIdx = outHeader.indexOf("Bands"), listIdx = outHeader.indexOf("BandList");
+  const bandList = bands.map(b => b.name + "=" + b.short).join("|");
+  const namesOf = c => bands.filter((b, i) => c.bands >> i & 1).map(b => b.name).join("|");
+  let lost = 0;
+  const sorted = chans.slice().sort((a, b) => a.num - b.num);
+  const lines = sorted.map((c, row) => {
+    let f;
+    if (c.csvRow && !c.edited) {
+      f = c.csvRow.fields.slice();
+      while (f.length < outHeader.length) f.push("");
+    } else {
+      let tones = csvToneFields(c.rxc, c.txc);
+      if (!tones || (tones.Tone === "Cross" && !crossCol)) { lost++; tones = csvToneFields(0, 0); }
+      const val = {
+        Location: String(c.num), Name: c.name, Frequency: parseFloat(c.freq).toFixed(6), Duplex: c.duplex, Offset: parseFloat(c.offset || 0).toFixed(6),
+        ...tones, Mode: c.mode, TStep: "5.00", Skip: c.skip,
+        Power: c.powerText && powerRawFromText(c.powerText) === c.powerRaw ? c.powerText : { 0: "8.0W", 1: "1.0W", 2: "5.0W" }[c.powerRaw], Comment: c.note || "",
+      };
+      f = outHeader.map(h => quote(val[h] ?? ""));
+    }
+    f[bandsIdx] = quote(namesOf(c));
+    f[listIdx] = row === 0 ? quote(bandList) : "";
+    return f.join(",") + (c.csvRow && !c.edited ? (c.csvRow.eol || eol) : eol);
+  });
+  exportCsv.lost = lost;
+  return (csvBase ? csvBase.parsed.bom : "") + headLine + lines.join("");
+}
+
+function saveFile(name, data, type) {
+  const url = URL.createObjectURL(new Blob([data], { type }));
+  const a = document.createElement("a");
+  a.href = url; a.download = name;
+  document.body.append(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 5000);
+}
+
+const stamp = () => new Date().toISOString().slice(0, 19).replace(/[-:]/g, "").replace("T", "-");
+
+/* ---------- channel editor ---------- */
+function fillToneSelect(sel, value) {
+  sel.textContent = "";
+  const add = (parent, v, text) => { const o = document.createElement("option"); o.value = String(v); o.textContent = text; parent.append(o); };
+  add(sel, 0, "OFF");
+  const groups = [["CTCSS (Hz)", CTCSS_CODES], ["DCS normal", DCS_CODES.map((_, i) => i + 1)], ["DCS inverted", DCS_CODES.map((_, i) => i + 106)]];
+  for (const [label, codes] of groups) {
+    const g = document.createElement("optgroup"); g.label = label;
+    for (const v of codes) add(g, v, toneText(v));
+    sel.append(g);
+  }
+  if (value && !sel.querySelector(`option[value="${value}"]`)) add(sel, value, toneText(value) + " (not in the radio's list)");
+  sel.value = String(value || 0);
+}
+
+function fillBandBoxes(mask) {
+  const host = $("fBands");
+  host.textContent = "";
+  if (!bands.length) { host.innerHTML = '<span class="muted">No bands yet. Make one with New band.</span>'; return; }
+  bands.forEach((b, i) => {
+    const l = document.createElement("label");
+    const cb = document.createElement("input");
+    cb.type = "checkbox"; cb.value = String(i); cb.checked = !!(mask >> i & 1);
+    l.append(cb, b.name);
+    host.append(l);
+  });
+}
+const editorMask = () => [...$("fBands").querySelectorAll("input")].reduce((m, cb) => cb.checked ? m | 1 << Number(cb.value) : m, 0);
+
+function syncEditor() {
+  const rep = $("fDuplex").value === "+" || $("fDuplex").value === "-";
+  $("offsetRow").classList.toggle("hidden", !rep);
+  const air = isAirband($("fFreq").value);
+  $("fMode").disabled = air;
+  $("fMode").title = air ? "Airband channels always use AM" : "";
+  $("fTx").disabled = $("fDuplex").value === "off";
+}
+
+function openEditor(c, bandIndex) {
+  editing = c;
+  const inBand = bandIndex >= 0 ? bands[bandIndex] : null;
+  $("editTitle").textContent = c ? `Channel ${c.num}` : inBand ? `Add channel to ${inBand.name}` : "Add channel";
+  const v = c || { num: nextFree(), name: "", freq: "146.520000", duplex: "", offset: "0", rxc: 0, txc: 0, mode: "FM", powerRaw: 2, skip: "", note: "", bands: inBand ? 1 << bandIndex : 0 };
+  $("fNum").value = v.num; $("fName").value = v.name; $("fFreq").value = parseFloat(v.freq).toString();
+  $("fDuplex").value = v.duplex; $("fOffset").value = parseFloat(v.offset || 0).toString();
+  fillToneSelect($("fTx"), v.txc); fillToneSelect($("fRx"), v.rxc);
+  $("fMode").value = v.mode === "NFM" ? "NFM" : "FM";
+  $("fPower").value = String(v.powerRaw); $("fScan").checked = v.skip !== "S"; $("fNote").value = v.note || "";
+  fillBandBoxes(v.bands || 0);
+  $("delBtn").classList.toggle("hidden", !c);
+  $("formErr").textContent = "";
+  syncEditor();
+  $("editDlg").showModal();
+}
+
+function nextFree() {
+  const used = new Set(chans.map(c => c.num));
+  for (let n = 1; n <= MAX_CHANNELS; n++) if (!used.has(n)) return n;
+  return null;
+}
+
+function applyEditor() {
+  const num = Number($("fNum").value);
+  if (!Number.isInteger(num) || num < 1 || num > MAX_CHANNELS) { $("formErr").textContent = `Channel number must be 1 to ${MAX_CHANNELS}.`; return; }
+  if (chans.some(c => c.num === num && c !== editing)) { $("formErr").textContent = `Channel ${num} is already in use. Pick a free number.`; return; }
+  const freq = $("fFreq").value.trim(), duplex = $("fDuplex").value;
+  const patch = {
+    num, name: $("fName").value, freq, duplex, offset: duplex === "+" || duplex === "-" ? ($("fOffset").value.trim() || "0") : "0",
+    rxc: Number($("fRx").value), txc: duplex === "off" ? 0 : Number($("fTx").value),
+    mode: isAirband(freq) ? "AM" : $("fMode").value, powerRaw: Number($("fPower").value), skip: $("fScan").checked ? "" : "S", note: $("fNote").value,
+    bands: editorMask(),
+  };
+  const trial = { ...(editing || { extra: null, csvRow: null, powerText: "" }), ...patch };
+  const err = validate(trial);
+  if (err) { $("formErr").textContent = err.replace(/^Channel \d+: /, "").replace(/^./, s => s.toUpperCase()); return; }
+  if (editing) {
+    const same = Object.keys(patch).every(k => editing[k] === patch[k] || (k === "freq" || k === "offset") && to10Hz(editing[k] || 0) === to10Hz(patch[k]));
+    if (!same) { setField(editing, patch); setDirty(true); }
+  } else { trial.edited = true; chans.push(trial); setDirty(true); }
+  $("editDlg").close();
+  render();
+  if (!editing) {
+    const where = bands.filter((b, i) => patch.bands >> i & 1).map(b => b.name);
+    setNotice(`Added channel ${num} ${patch.name}` + (where.length ? ` to ${where.join(", ")}.` : ". It isn't in a band, so it only scans under ALL."), "ok");
+  }
+}
+
+/* ---------- radio actions ---------- */
+async function getPort() {
+  if (!port) port = await navigator.serial.requestPort();
+  return port;
+}
+
+async function withLink(fn) {
+  let link;
+  try {
+    link = new Link(await getPort());
+    await link.open();
+    await link.handshake();
+    return await fn(link);
+  } finally {
+    if (link) await link.close();
+  }
+}
+
+function describeError(e) {
+  if (e && e.name === "NotFoundError") return "No port was picked. Choose the USB-SERIAL CH340 entry.";
+  if (e && (e.name === "InvalidStateError" || e.name === "NetworkError")) return "The cable's port is busy or unplugged. Close other radio programs and try again.";
+  return e && e.message ? e.message : String(e);
+}
+
+function diffSummary(current, target) {
+  const lines = [];
+  let changed = 0, added = 0, removed = 0;
+  for (let n = 0; n < MAX_CHANNELS; n++) {
+    const a = current.subarray(n * REC, (n + 1) * REC), b = target.subarray(n * REC, (n + 1) * REC);
+    if (sameBytes(a, b)) continue;
+    const was = isBlank(current, n), gone = isBlank(target, n);
+    if (was) added++; else if (gone) removed++; else changed++;
+    const before = was ? null : decode(current, n), after = gone ? null : decode(target, n);
+    const label = (after || before).name || "(no name)";
+    lines.push(`CH ${String(n + 1).padStart(3, "0")} ${label}: ` + (was ? "added" : gone ? "removed from radio" : "changed"));
+  }
+  const bandBytes = t => t.subarray(BAND_SLOT * REC, RECORDS * REC);
+  const bandsChanged = !sameBytes(bandBytes(current), bandBytes(target));
+  if (bandsChanged) lines.unshift("Bands: " + (bands.map(b => b.name).join(", ") || "none"));
+  return { lines, changed, added, removed, bandsChanged };
+}
+
+function checkAll() {
+  for (const c of chans) {
+    const err = validate(c);
+    if (err) throw new Error(err);
+  }
+  return buildTable(chans, bands);
+}
+
+async function readRadioTable() {
+  return withLink(async link => {
+    const t = await link.readChannels(progress);
+    await link.end();
+    return t;
+  });
+}
+
+async function readFromRadio() {
+  setBusy(true);
+  setNotice("Reading the radio. This takes about 20 seconds...");
+  try {
+    const table = await readRadioTable();
+    const base = channelsFromCsv(BUILTIN_CSV);
+    const r = channelsFromTable(table, base.chans);
+    showList(r.list, r.bands, base, "your radio", { radio: table, dirty: r.defaulted });
+    setNotice(r.defaulted
+      ? `Read ${r.list.length} channels. The radio has no bands yet, so these are the Clark County bands by channel number. Change them as you like, then click Write to radio.`
+      : `Read ${r.list.length} channels and ${r.bands.length} bands. Edit them below, then click Write to radio.`, "ok");
+    return table;
+  } catch (e) {
+    setNotice(describeError(e), "err");
+    return null;
+  } finally { setBusy(false); }
+}
+
+let pendingTarget = null, pendingCurrent = null;
+async function startUpload() {
+  let target;
+  try { target = checkAll(); } catch (e) { setNotice(e.message, "err"); return; }
+  setBusy(true);
+  setNotice("Reading the radio to see what would change...");
+  try {
+    const current = await readRadioTable();
+    radioTable = current;
+    render();
+    const d = diffSummary(current, target);
+    if (!d.lines.length) { setNotice("Nothing to write. The radio already matches this list.", "ok"); setDirty(false); return; }
+    pendingTarget = target; pendingCurrent = current;
+    const parts = [];
+    if (d.changed) parts.push(`${d.changed} changed`);
+    if (d.added) parts.push(`${d.added} added`);
+    if (d.removed) parts.push(`${d.removed} removed`);
+    if (d.bandsChanged) parts.push("bands updated");
+    $("confirmText").textContent = parts.join(", ") + ". The radio will match this list exactly.";
+    const list = $("diffList"); list.textContent = "";
+    for (const l of d.lines.slice(0, 200)) { const li = document.createElement("li"); li.textContent = l; list.append(li); }
+    if (d.lines.length > 200) { const li = document.createElement("li"); li.textContent = `...and ${d.lines.length - 200} more`; list.append(li); }
+    setNotice("Check the changes and confirm.");
+    $("confirmDlg").showModal();
+  } catch (e) {
+    setNotice(describeError(e), "err");
+  } finally { setBusy(false); }
+}
+
+async function finishUpload() {
+  const target = pendingTarget, preview = pendingCurrent;
+  pendingTarget = pendingCurrent = null;
+  setBusy(true);
+  setNotice("Writing. Don't unplug the radio...");
+  let wrote = false;
+  try {
+    const result = await withLink(async link => {
+      const current = await link.readChannels(f => progress(f * 0.3));
+      if (!sameBytes(current, preview)) throw new Error("The radio's channels changed since the check, so nothing was written. Try again.");
+      saveFile(`radio-backup-${stamp()}.bin`, current, "application/octet-stream");
+      const sectors = touchedSectors(current, target);
+      wrote = true;
+      const bad = await writeSectors(link, target, sectors, f => progress(0.3 + f * 0.7));
+      await link.end();
+      return { sectors, bad, current };
+    });
+    if (result.bad.length) {
+      setNotice("Some channels didn't match when read back. Write again, and if it repeats, open the backup file and write that. It was saved before writing.", "err");
+      return;
+    }
+    radioTable = target;
+    setDirty(false);
+    setNotice("Done and checked. The radio is restarting.", "ok");
+    render();
+  } catch (e) {
+    const msg = describeError(e);
+    setNotice(wrote ? msg + " Writing was interrupted, so some channels may be blank until you write again. Your backup was saved first." : msg, "err");
+  } finally { setBusy(false); }
+}
+
+async function openFile(file) {
+  try {
+    if (/\.bin$/i.test(file.name)) {
+      const raw = new Uint8Array(await file.arrayBuffer());
+      if (raw.length !== TABLE_BYTES && raw.length !== OLD_TABLE_BYTES) throw new Error(`That backup is ${raw.length} bytes, not the ${TABLE_BYTES} a channel backup should be.`);
+      const data = new Uint8Array(TABLE_BYTES).fill(0xFF);
+      data.set(raw);
+      const base = channelsFromCsv(BUILTIN_CSV);
+      const r = channelsFromTable(data, base.chans);
+      showList(r.list, r.bands, base, file.name, { dirty: true });
+    } else {
+      loadCsvText(await file.text(), file.name);
+    }
+    setNotice(`Opened ${file.name}. Click Write to radio when you're ready.`, "ok");
+  } catch (err) {
+    setNotice(err.message + (loaded ? " Your current list is unchanged." : ""), "err");
+  }
+}
+
+const okToLeave = () => !dirty || confirm("You have changes that aren't saved to a file or written to the radio. Discard them?");
+
+/* ---------- quick messages for TEXT ----------
+   Ten 64-byte records at the start of the app data area (0x194000), which the TEXT app reads.
+   A record is "Q", a length and the text; one without the "Q" reads as the app's built-in message.
+   Written with the programming port's satellite-table command, whose first chunk erases the area,
+   and read back with its raw flash read, so no firmware change was needed. */
+const QUICK_DEFAULTS = __QUICK__;
+const CMD_FLASH_READ = 0x44, CMD_QUICK_WRITE = 0x53;
+const QUICK_ADDR = 0x194000, QUICK_REC = 64, QUICK_COUNT = 10, QUICK_LEN = 50, QUICK_MAGIC = 0x51, QUICK_CHUNK = 512;
+let quickOnRadio = null;
+
+const quickClean = s => s.toUpperCase().replace(/[^\x20-\x7E]/g, "").slice(0, QUICK_LEN);
+
+function quickBytes(list) {
+  const t = new Uint8Array(2 * QUICK_CHUNK).fill(0xFF);
+  list.forEach((m, i) => {
+    const at = i * QUICK_REC;
+    t[at] = QUICK_MAGIC; t[at + 1] = m.length;
+    for (let j = 0; j < m.length; j++) t[at + 2 + j] = m.charCodeAt(j);
+  });
+  return t;
+}
+
+/* Reads the way the app does: a bad record is the built-in message, and characters the screen
+   can't show are question marks. */
+function quickFromBytes(t) {
+  let builtIn = 0;
+  const list = [];
+  for (let i = 0; i < QUICK_COUNT; i++) {
+    const at = i * QUICK_REC;
+    if (t[at] === QUICK_MAGIC && t[at + 1] <= QUICK_LEN) {
+      list.push(String.fromCharCode(...t.subarray(at + 2, at + 2 + t[at + 1]).map(c => c >= 0x20 && c < 0x7F ? c : 0x3F)));
+    } else { list.push(QUICK_DEFAULTS[i]); builtIn++; }
+  }
+  return { list, builtIn };
+}
+
+async function readQuickRecords(link) {
+  const t = new Uint8Array(QUICK_COUNT * QUICK_REC);
+  for (let i = 0; i < QUICK_COUNT; i++) {
+    let r;
+    try { r = await link.send(CMD_FLASH_READ, (QUICK_ADDR + i * QUICK_REC) / 64); }
+    catch (e) { if (e.refused) throw new Error("This radio's firmware can't read quick messages. Flash UV-5RM_Custom_Firmware.BF from this repo first."); throw e; }
+    if (r.data.length !== QUICK_REC) throw new Error("The radio sent an unexpected reply.");
+    t.set(r.data, i * QUICK_REC);
+  }
+  return t;
+}
+
+const quickInputs = () => [...$("qList").querySelectorAll("input")];
+const quickValues = () => quickInputs().map(i => quickClean(i.value));
+
+function quickMark() {
+  quickInputs().forEach((inp, i) => {
+    const v = quickClean(inp.value);
+    inp.closest("li").querySelector(".qcount").textContent = `${v.length}/${QUICK_LEN}`;
+    inp.closest("li").classList.toggle("changed", !!quickOnRadio && quickOnRadio[i] !== v);
+  });
+}
+
+function fillQuick(list) {
+  quickInputs().forEach((inp, i) => { inp.value = list[i]; });
+  quickMark();
+}
+
+function buildQuickList() {
+  const ol = $("qList");
+  ol.textContent = "";
+  for (let i = 0; i < QUICK_COUNT; i++) {
+    const li = document.createElement("li");
+    li.value = i === 9 ? 0 : i + 1;   // the keypad number that picks it on the radio
+    const row = document.createElement("div"); row.className = "qrow";
+    const inp = document.createElement("input");
+    inp.type = "text"; inp.maxLength = QUICK_LEN; inp.placeholder = "(empty)"; inp.spellcheck = false;
+    inp.setAttribute("aria-label", `Quick message ${i === 9 ? 0 : i + 1}`);
+    inp.addEventListener("input", () => {
+      const clean = quickClean(inp.value);
+      if (clean !== inp.value.toUpperCase()) inp.value = clean;
+      $("quickErr").textContent = "";
+      quickMark();
+    });
+    const count = document.createElement("span"); count.className = "qcount";
+    row.append(inp, count); li.append(row); ol.append(li);
+  }
+}
+
+function openQuick() {
+  if (!quickInputs().length) buildQuickList();
+  if (!$("quickDlg").open) {
+    if (!quickOnRadio) {
+      fillQuick(QUICK_DEFAULTS);
+      $("quickInfo").textContent = "Showing the built-in messages. Click Read from radio to see what's on yours.";
+    }
+    $("quickErr").textContent = "";
+    $("quickDlg").showModal();
+  }
+}
+
+async function readQuick() {
+  setBusy(true);
+  $("quickErr").textContent = "";
+  $("quickInfo").textContent = "Reading the radio...";
+  try {
+    const t = await withLink(async link => { const t = await readQuickRecords(link); await link.end(); return t; });
+    const r = quickFromBytes(t);
+    quickOnRadio = r.list;
+    fillQuick(r.list);
+    $("quickInfo").textContent = r.builtIn === QUICK_COUNT
+      ? "This radio has the built-in messages. Change any of them, then click Write to radio."
+      : `Read from your radio${r.builtIn ? `, ${r.builtIn} still built-in` : ""}. Change any of them, then click Write to radio.`;
+  } catch (e) {
+    $("quickInfo").textContent = "";
+    $("quickErr").textContent = describeError(e);
+  } finally { setBusy(false); }
+}
+
+async function writeQuick() {
+  const list = quickValues();
+  const target = quickBytes(list);
+  setBusy(true);
+  $("quickErr").textContent = "";
+  $("quickInfo").textContent = "Writing. Don't unplug the radio...";
+  try {
+    const ok = await withLink(async link => {
+      // The first chunk erases the whole area first, which takes a moment.
+      await link.send(CMD_QUICK_WRITE, 0, target.subarray(0, QUICK_CHUNK), 5000);
+      await link.send(CMD_QUICK_WRITE, QUICK_CHUNK, target.subarray(QUICK_CHUNK));
+      const back = await readQuickRecords(link);
+      await link.end();
+      return sameBytes(back, target.subarray(0, back.length));
+    });
+    if (!ok) { $("quickInfo").textContent = ""; $("quickErr").textContent = "The radio didn't read back what was written. Click Write to radio again."; return; }
+    quickOnRadio = list;
+    fillQuick(list);
+    $("quickInfo").textContent = "";
+    setNotice("Quick messages written and checked. The radio is restarting.", "ok");
+    $("quickDlg").close();
+  } catch (e) {
+    $("quickInfo").textContent = "";
+    $("quickErr").textContent = describeError(e) + (e && e.refused ? " Your firmware may be too old for quick messages." : "");
+  } finally { setBusy(false); }
+}
+
+/* ---------- wiring ---------- */
+$("startRadio").addEventListener("click", readFromRadio);
+$("startBuiltin").addEventListener("click", () => {
+  loadCsvText(BUILTIN_CSV, "Clark County list");
+  setNotice("Showing the Clark County list and its bands. Edit anything, then click Write to radio. Channels on your radio that aren't in this list will be removed.", "ok");
+});
+$("changeList").addEventListener("click", () => { if (okToLeave()) { showStart(); setNotice("Pick where to start."); } });
+$("search").addEventListener("input", render);
+$("addCh").addEventListener("click", () => openEditor(null, -1));
+$("newBand").addEventListener("click", () => openBandDialog(-1));
+$("bandOk").addEventListener("click", saveBand);
+$("bandCancel").addEventListener("click", () => $("bandDlg").close());
+$("bandDelCancel").addEventListener("click", () => $("bandDelDlg").close());
+$("bandDelKeep").addEventListener("click", () => finishDeleteBand(true));
+$("bandDelAll").addEventListener("click", () => finishDeleteBand(false));
+for (const id of ["bName", "bShort"]) $(id).addEventListener("keydown", e => { if (e.key === "Enter") saveBand(); });
+$("fDuplex").addEventListener("change", syncEditor);
+$("fFreq").addEventListener("input", syncEditor);
+$("okBtn").addEventListener("click", applyEditor);
+$("cancelBtn").addEventListener("click", () => $("editDlg").close());
+$("delBtn").addEventListener("click", () => { $("editDlg").close(); if (editing) deleteChannel(editing); });
+$("uploadBtn").addEventListener("click", startUpload);
+$("quickBtn").addEventListener("click", openQuick);
+$("startQuick").addEventListener("click", openQuick);
+$("qRead").addEventListener("click", readQuick);
+$("qWrite").addEventListener("click", writeQuick);
+$("qClose").addEventListener("click", () => $("quickDlg").close());
+$("qDefaults").addEventListener("click", () => { fillQuick(QUICK_DEFAULTS); $("quickInfo").textContent = "Built-in messages filled in. Click Write to radio to put them on the radio."; });
+// Escape mustn't close the dialog halfway through a write.
+$("quickDlg").addEventListener("cancel", e => { if (busy) e.preventDefault(); });
+$("confirmNo").addEventListener("click", () => { $("confirmDlg").close(); pendingTarget = pendingCurrent = null; setNotice("Canceled. Nothing was written."); });
+$("confirmYes").addEventListener("click", () => { $("confirmDlg").close(); finishUpload(); });
+$("saveCsv").addEventListener("click", () => {
+  const text = exportCsv();
+  saveFile(`UV-5RM-channels-${stamp()}.csv`, text, "text/csv");
+  setDirty(false);
+  const lost = exportCsv.lost;
+  setNotice("Saved to your Downloads folder, bands included. Open it here later with Load a different list, then Open a file." + (lost ? ` ${lost} channels have tones that file can't hold, so they were saved without tones.` : ""), lost ? "err" : "ok");
+});
+$("fileIn").addEventListener("change", e => {
+  const file = e.target.files[0];
+  e.target.value = "";
+  if (file) openFile(file);
+});
+document.querySelector(".filebtn").addEventListener("keydown", e => {
+  if (e.key === "Enter" || e.key === " ") { e.preventDefault(); $("fileIn").click(); }
+});
+window.addEventListener("resize", placeLogo);
+window.addEventListener("beforeunload", e => { if (dirty || busy) { e.preventDefault(); e.returnValue = ""; } });
+
+try { const b = channelsFromCsv(BUILTIN_CSV); $("builtinInfo").textContent = `The ${b.chans.length} channels and ${b.bands.length} bands that come with this repo.`; } catch (e) {}
+if (!serialOk) $("noSerial").classList.remove("hidden");
+showStart();
+</script>
+</body>
+</html>

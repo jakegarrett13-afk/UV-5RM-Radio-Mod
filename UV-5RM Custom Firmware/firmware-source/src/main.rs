@@ -108,13 +108,15 @@ fn check_power_off(
 }
 
 #[inline(never)]
+/// Draws logo bands `from..to`, each `LOGO_CHUNK_ROWS` tall.
 fn draw_boot_logo(
     display: &mut device::display::Display<'_>,
     app: &mut app::App<'_>,
+    from: u16,
+    to: u16,
 ) {
     let width = flash_map::BOOT_LOGO_WIDTH as u32;
-    let rows = flash_map::BOOT_LOGO_HEIGHT / ui::boot::LOGO_CHUNK_ROWS;
-    for band in 0..rows {
+    for band in from..to {
         let y0 = band * ui::boot::LOGO_CHUNK_ROWS;
         let mut chunk = [0u8; ui::boot::LOGO_CHUNK_BYTES];
         app.storage_mut().read_raw(
@@ -344,15 +346,28 @@ fn main() -> ! {
     );
     app.init_battery_samples();
 
+    // Logo boot: a CRT warming up. A few frames of snow, then the logo, which
+    // glitches and flickers through the hold below.
+    const BANDS: u16 = flash_map::BOOT_LOGO_HEIGHT / ui::boot::LOGO_CHUNK_ROWS;
+    let mut seed = hal::uptime::now32() | 1;
     let boot_mode = app.settings().boot_display_mode;
+    backlight.on();
     match boot_mode {
-        1 | 2 => draw_boot_logo(&mut display, &mut app),
+        1 | 2 => {
+            for _ in 0..6 {
+                ui::boot::draw_snow(
+                    display.as_draw_target(),
+                    0,
+                    flash_map::BOOT_LOGO_HEIGHT,
+                    &mut seed,
+                );
+            }
+            draw_boot_logo(&mut display, &mut app, 0, BANDS);
+        }
         // 0 = None: screen is already cleared black from just after
         // `display.init()`, nothing more to draw.
         _ => {}
     }
-
-    backlight.on();
 
     if boot_mode != 0 {
         if app.settings().boot_sound_enabled {
@@ -363,6 +378,7 @@ fn main() -> ! {
         }
 
         let mut remaining_ms: u32 = 1000;
+        let mut glitch: Option<u16> = None;
         while remaining_ms > 0 {
             check_power_off(
                 &dp.gpiob,
@@ -371,9 +387,28 @@ fn main() -> ! {
                 &mut app,
                 &mut cp.SYST,
             );
+            backlight.on();
+            if let Some(band) = glitch.take() {
+                draw_boot_logo(&mut display, &mut app, band, band + 3);
+            }
+            let r = ui::boot::next_random(&mut seed);
+            if remaining_ms > 60 && r & 3 == 0 {
+                let band = (r >> 8) as u16 % (BANDS - 2);
+                ui::boot::draw_snow(
+                    display.as_draw_target(),
+                    band * ui::boot::LOGO_CHUNK_ROWS,
+                    3 * ui::boot::LOGO_CHUNK_ROWS,
+                    &mut seed,
+                );
+                glitch = Some(band);
+            }
+            if remaining_ms > 60 && r & 0x70 == 0 {
+                backlight.off();
+            }
             delay_ms(30);
             remaining_ms = remaining_ms.saturating_sub(30);
         }
+        backlight.on();
     }
 
     let mut ui_state = ui::UiState::new();

@@ -1,7 +1,7 @@
 use super::backdrop::draw_backdrop;
 use super::list::{draw_list, Cache, ListSource};
 use super::{TextBuf, SCREEN_H};
-use crate::app::{self, modes_table};
+use crate::app::{self, band_count, band_label, label_str, menu_row, BAND_NAME};
 use core::fmt::Write as _;
 use embedded_graphics::mono_font::ascii::{FONT_6X10, FONT_9X18};
 use embedded_graphics::mono_font::MonoTextStyle;
@@ -14,14 +14,16 @@ const DIM: Rgb565 = Rgb565::new(13, 26, 13);
 const ACTIVE: Rgb565 = Rgb565::new(31, 50, 0);
 const ALERT: Rgb565 = Rgb565::new(31, 8, 4);
 
+/// Rows: ALL, each band made on the PC, then CUSTOM RANGE.
 struct ModeSource<'a, 'b> {
     current: usize,
+    count: u8,
     app: &'a mut app::App<'b>,
 }
 
 impl<'a, 'b> ListSource for ModeSource<'a, 'b> {
     fn row_count(&mut self) -> usize {
-        modes_table().len()
+        self.count as usize + 2
     }
 
     fn read_flash(&mut self, addr: u32, buf: &mut [u8]) {
@@ -29,7 +31,15 @@ impl<'a, 'b> ListSource for ModeSource<'a, 'b> {
     }
 
     fn label(&mut self, index: usize, w: &mut dyn core::fmt::Write) {
-        let _ = w.write_str(modes_table()[index].name);
+        if index == 0 {
+            let _ = w.write_str("ALL");
+        } else if index <= self.count as usize {
+            if let Some(l) = band_label(self.app.storage_mut(), index as u8) {
+                let _ = w.write_str(label_str(&l[..BAND_NAME]));
+            }
+        } else {
+            let _ = w.write_str("CUSTOM RANGE");
+        }
     }
 
     fn value(&mut self, index: usize, w: &mut dyn core::fmt::Write) -> bool {
@@ -47,8 +57,10 @@ where
     D: DrawTarget<Color = Rgb565>,
 {
     let index = app.mode_menu_index();
+    let count = band_count(app.storage_mut());
     let mut source = ModeSource {
-        current: app.chan_mode_index(),
+        current: menu_row(count, app.chan_mode_index() as u8),
+        count,
         app,
     };
     draw_list(lcd, "MODE", &mut source, index, false, cache);

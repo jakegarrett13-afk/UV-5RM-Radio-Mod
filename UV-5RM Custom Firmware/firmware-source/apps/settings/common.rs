@@ -14,7 +14,7 @@ pub const KEY_UP: u8 = 14;
 pub const KEY_DOWN: u8 = 15;
 
 pub const SETTINGS_BYTES: usize = 168;
-pub const SIDE_CFG_BYTES: usize = 14;
+pub const SIDE_CFG_BYTES: usize = 17;
 pub const VISIBLE_ROWS: usize = 8;
 
 pub const COORD_NOT_SET: i32 = i32::MAX;
@@ -24,6 +24,10 @@ pub const STEP_LIST_DECI_HZ: [u32; 9] =
     [250, 500, 625, 1000, 1250, 2000, 2500, 5000, 10000];
 pub const RTONE_HZ_DIV_10: [u16; 4] = [100, 145, 175, 210];
 pub const CONTACT_COUNT: i32 = 20;
+/// Mic gain lives in settings byte 66, past the boot text the logo screen doesn't use.
+/// 0 is the default level, the same as 127; 1 to 128 are register values 0 to 127.
+#[cfg(feature = "g_radio")]
+const MIC_GAIN_AT: usize = 66 - 40;
 pub const SUBAUDIO_MAX_INDEX: i32 = 259;
 
 // segments
@@ -32,7 +36,8 @@ pub const SEG_MENU: u8 = 0;
 pub const SEG_RADIO: u8 = 1;
 pub const SEG_SYSTEM: u8 = 2;
 
-pub const GROUP_SEG: [u8; 6] = [
+pub const GROUP_SEG: [u8; 7] = [
+    SEG_RADIO,  // Channel
     SEG_RADIO,  // Radio
     SEG_MENU,   // Sig
     SEG_MENU,   // Display
@@ -44,11 +49,11 @@ pub const GROUP_SEG: [u8; 6] = [
 /// `true` when this segment compiled the items of group `gi`.
 const fn have_group(gi: usize) -> bool {
     match gi {
-        0 => cfg!(feature = "g_radio"),
-        1 => cfg!(feature = "g_audio"),
-        2 => cfg!(feature = "g_disp"),
-        3 => cfg!(feature = "g_keys"),
-        4 => cfg!(feature = "g_ani"),
+        0 | 1 => cfg!(feature = "g_radio"),
+        2 => cfg!(feature = "g_audio"),
+        3 => cfg!(feature = "g_disp"),
+        4 => cfg!(feature = "g_keys"),
+        5 => cfg!(feature = "g_ani"),
         _ => cfg!(feature = "g_system"),
     }
 }
@@ -328,6 +333,9 @@ pub struct SideCfg {
     offset_hz: u32,
     ani_target: i16,
     freq_step: u8,
+    scramble: u8,
+    busy_lock: bool,
+    scan_add: bool,
 }
 
 impl SideCfg {
@@ -341,6 +349,9 @@ impl SideCfg {
             offset_hz: u32::from_le_bytes([buf[7], buf[8], buf[9], buf[10]]),
             ani_target: i16::from_le_bytes([buf[11], buf[12]]),
             freq_step: buf[13],
+            scramble: buf[14],
+            busy_lock: buf[15] != 0,
+            scan_add: buf[16] != 0,
         }
     }
 
@@ -354,6 +365,9 @@ impl SideCfg {
         buf[7..11].copy_from_slice(&self.offset_hz.to_le_bytes());
         buf[11..13].copy_from_slice(&self.ani_target.to_le_bytes());
         buf[13] = self.freq_step;
+        buf[14] = self.scramble;
+        buf[15] = self.busy_lock as u8;
+        buf[16] = self.scan_add as u8;
         buf
     }
 }
@@ -378,6 +392,8 @@ pub enum SettingItem {
     Tot,
     Tdr,
     Save,
+    Mic,
+    ChScan,
     Abr,
     BusyLock,
     TxForbid,
@@ -421,6 +437,7 @@ pub enum SettingItem {
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum SettingsGroup {
+    Channel,
     Radio,
     Sig,
     Display,
@@ -429,7 +446,8 @@ pub enum SettingsGroup {
     System,
 }
 
-pub const SETTINGS_GROUPS: [SettingsGroup; 6] = [
+pub const SETTINGS_GROUPS: [SettingsGroup; 7] = [
+    SettingsGroup::Channel,
     SettingsGroup::Radio,
     SettingsGroup::Sig,
     SettingsGroup::Display,
@@ -441,7 +459,8 @@ pub const SETTINGS_GROUPS: [SettingsGroup; 6] = [
 impl SettingsGroup {
     fn label(self) -> &'static str {
         match self {
-            SettingsGroup::Radio => "RADIO",
+            SettingsGroup::Channel => "CURRENT CHANNEL",
+            SettingsGroup::Radio => "ALL CHANNELS",
             SettingsGroup::Sig => "AUDIO",
             SettingsGroup::Display => "DISP",
             SettingsGroup::Keys => "KEYS",
@@ -454,9 +473,10 @@ impl SettingsGroup {
         use SettingItem::*;
         match self {
             #[cfg(feature = "g_radio")]
+            SettingsGroup::Channel => &[Wn, TxPr, RxCts, TxCts, Sftd, Offse, Scrm, BusyLock, ChScan],
+            #[cfg(feature = "g_radio")]
             SettingsGroup::Radio => &[
-                Sql, Step, Tot, Tdr, Save, BusyLock, TxForbid, Wn, TxPr, RxCts,
-                TxCts, Sftd, Offse, Scrm, ScanMd, Rit, ChDisp,
+                Sql, Mic, Step, Tot, Tdr, Save, TxForbid, ScanMd, Rit, ChDisp,
             ],
             #[cfg(feature = "g_audio")]
             SettingsGroup::Sig => {
@@ -489,6 +509,10 @@ impl SettingItem {
             #[cfg(feature = "g_radio")]
             Sql => "SQL",
             #[cfg(feature = "g_radio")]
+            Mic => "MIC GAIN",
+            #[cfg(feature = "g_radio")]
+            ChScan => "SCAN",
+            #[cfg(feature = "g_radio")]
             Step => "STEP",
             #[cfg(feature = "g_radio")]
             Tot => "TOT",
@@ -497,7 +521,7 @@ impl SettingItem {
             #[cfg(feature = "g_radio")]
             Save => "SAVE",
             #[cfg(feature = "g_radio")]
-            BusyLock => "BCL",
+            BusyLock => "BUSY LOCK",
             #[cfg(feature = "g_radio")]
             TxForbid => "TXINH",
             #[cfg(feature = "g_radio")]
@@ -505,15 +529,15 @@ impl SettingItem {
             #[cfg(feature = "g_radio")]
             TxPr => "PWR",
             #[cfg(feature = "g_radio")]
-            RxCts => "R-CTC",
+            RxCts => "RX TONE",
             #[cfg(feature = "g_radio")]
-            TxCts => "T-CTC",
+            TxCts => "TX TONE",
             #[cfg(feature = "g_radio")]
             Sftd => "SHIFT",
             #[cfg(feature = "g_radio")]
             Offse => "OFFSET",
             #[cfg(feature = "g_radio")]
-            Scrm => "SCRM",
+            Scrm => "RX SCRAMBLE",
             #[cfg(feature = "g_radio")]
             ScanMd => "SCANMD",
             #[cfg(feature = "g_radio")]
@@ -603,6 +627,9 @@ impl SettingItem {
         matches!(
             self,
             SettingItem::Step
+                | SettingItem::Scrm
+                | SettingItem::BusyLock
+                | SettingItem::ChScan
                 | SettingItem::Wn
                 | SettingItem::TxPr
                 | SettingItem::RxCts
@@ -630,6 +657,7 @@ fn key_function_label(v: u8) -> &'static str {
         2 => "MONITOR",
         3 => "MODE",
         4 => "TX TONE",
+        5 => "TEXT",
         6 => "SCAN",
         7 => "POWER",
         8 => "LIGHT",
@@ -905,6 +933,8 @@ fn dispatch_items_scalar(
                     && !item.is_side_cfg()
                 {
                     commit_settings(api, &st.settings);
+                } else {
+                    save_channel_item(api, st, item);
                 }
             }
         }
@@ -924,6 +954,88 @@ fn dispatch_items_scalar(
         _ => {}
     }
     None
+}
+
+/// Writes one confirmed setting to the channel showing, so it survives switching
+/// channels and restarting. In frequency mode the firmware already saves it, and this
+/// does nothing. A receive-only channel stays receive-only: its blank transmit
+/// frequency is never filled in from here.
+#[cfg(feature = "g_radio")]
+fn save_channel_item(api: &Api, st: &ItemsState, item: SettingItem) {
+    let shown = (api.settings_get)(8);
+    if shown == 0 {
+        return;
+    }
+    let num = (shown - 1) as u16;
+    let mut r = [0u8; 32];
+    if !(api.chan_read)(num, r.as_mut_ptr(), 32) {
+        return;
+    }
+    match item {
+        SettingItem::Wn => {
+            if st.side_cfg.wide_band {
+                r[15] &= !0x40;
+            } else {
+                r[15] |= 0x40;
+            }
+        }
+        SettingItem::TxPr => r[14] = st.side_cfg.power_raw,
+        SettingItem::Scrm => {
+            r[16] = if st.side_cfg.scramble == 0 { 0xFF } else { st.side_cfg.scramble }
+        }
+        SettingItem::BusyLock => {
+            if st.side_cfg.busy_lock {
+                r[15] |= 0x08;
+            } else {
+                r[15] &= !0x08;
+            }
+        }
+        SettingItem::ChScan => {
+            if st.side_cfg.scan_add {
+                r[15] |= 0x04;
+            } else {
+                r[15] &= !0x04;
+            }
+        }
+        SettingItem::RxCts => r[8..10].copy_from_slice(&st.side_cfg.subaudio_rx_code.to_le_bytes()),
+        SettingItem::TxCts => r[10..12].copy_from_slice(&st.side_cfg.subaudio_tx_code.to_le_bytes()),
+        SettingItem::Sftd | SettingItem::Offse => {
+            if r[4..8] == [0xFF; 4] {
+                return;
+            }
+            let rx_hz = bcd_to_tens_of_hz(&r[0..4]) * 10;
+            let tx_hz = match st.side_cfg.freq_dir {
+                1 => rx_hz.saturating_add(st.side_cfg.offset_hz),
+                2 => rx_hz.saturating_sub(st.side_cfg.offset_hz),
+                _ => rx_hz,
+            };
+            tens_of_hz_to_bcd(tx_hz / 10, &mut r[4..8]);
+        }
+        _ => return,
+    }
+    let _ = (api.chan_write)(num, r.as_ptr(), 32);
+}
+
+#[cfg(not(feature = "g_radio"))]
+fn save_channel_item(_: &Api, _: &ItemsState, _: SettingItem) {}
+
+/// Channel frequencies are 8 BCD digits in units of 10 Hz, low byte first.
+#[cfg(feature = "g_radio")]
+fn bcd_to_tens_of_hz(b: &[u8]) -> u32 {
+    let mut v = 0;
+    for &byte in b.iter().rev() {
+        v = v * 100 + (byte >> 4) as u32 * 10 + (byte & 0x0F) as u32;
+    }
+    v
+}
+
+#[cfg(feature = "g_radio")]
+fn tens_of_hz_to_bcd(mut v: u32, out: &mut [u8]) {
+    for byte in out.iter_mut() {
+        let two = v % 100;
+        *byte = ((two / 10) << 4 | (two % 10)) as u8;
+        v /= 100;
+    }
 }
 
 #[cfg(feature = "g_radio")]
@@ -953,6 +1065,7 @@ fn commit_offset_input(api: &Api, st: &mut ItemsState) {
     if !st.offset_input.is_empty() {
         let hz = st.offset_input.value() * 100;
         apply(api, st, SettingItem::Offse, hz as i32);
+        save_channel_item(api, st, SettingItem::Offse);
     }
     st.offset_input.clear();
     st.editing = false;
@@ -1085,13 +1198,24 @@ fn current_value(api: &Api, st: &ItemsState, item: SettingItem) -> i32 {
         #[cfg(feature = "g_radio")]
         Sql => st.settings.sql_level as i32,
         #[cfg(feature = "g_radio")]
+        Mic => {
+            let v = st.settings.boot_text_and_tune[MIC_GAIN_AT];
+            if v <= 128 {
+                v as i32
+            } else {
+                0
+            }
+        }
+        #[cfg(feature = "g_radio")]
         Step => st.side_cfg.freq_step as i32,
         #[cfg(feature = "g_radio")]
         Tot => st.settings.tot_level as i32,
         #[cfg(feature = "g_radio")]
         Tdr => st.settings.dual_standby as i32,
         #[cfg(feature = "g_radio")]
-        BusyLock => st.settings.busy_lock as i32,
+        BusyLock => st.side_cfg.busy_lock as i32,
+        #[cfg(feature = "g_radio")]
+        ChScan => st.side_cfg.scan_add as i32,
         #[cfg(feature = "g_radio")]
         TxForbid => st.settings.tx_forbid as i32,
         #[cfg(feature = "g_radio")]
@@ -1103,7 +1227,7 @@ fn current_value(api: &Api, st: &ItemsState, item: SettingItem) -> i32 {
         #[cfg(feature = "g_radio")]
         TxCts => (api.subaudio_index_of_code)(st.side_cfg.subaudio_tx_code),
         #[cfg(feature = "g_radio")]
-        Scrm => st.settings.scramble_level as i32,
+        Scrm => st.side_cfg.scramble as i32,
         #[cfg(feature = "g_radio")]
         Sftd => st.side_cfg.freq_dir as i32,
         #[cfg(feature = "g_radio")]
@@ -1185,6 +1309,16 @@ fn adjust(api: &Api, st: &mut ItemsState, item: SettingItem, up: bool) {
         #[cfg(feature = "g_radio")]
         Sql => clamp_step(cur, up, 0, 9),
         #[cfg(feature = "g_radio")]
+        Mic => clamp_step(cur, up, 0, 128),
+        #[cfg(feature = "g_radio")]
+        ChScan => {
+            if (api.settings_get)(8) == 0 {
+                cur
+            } else {
+                1 - cur
+            }
+        }
+        #[cfg(feature = "g_radio")]
         Step => clamp_step(cur, up, 0, STEP_LIST_DECI_HZ.len() as i32 - 1),
         #[cfg(feature = "g_radio")]
         Tot => clamp_step(cur, up, 0, 12),
@@ -1197,7 +1331,7 @@ fn adjust(api: &Api, st: &mut ItemsState, item: SettingItem, up: bool) {
         #[cfg(feature = "g_radio")]
         RxCts | TxCts => wrap_step(cur, up, -1, SUBAUDIO_MAX_INDEX),
         #[cfg(feature = "g_radio")]
-        Scrm => clamp_step(cur, up, 0, 3),
+        Scrm => clamp_step(cur, up, 0, 8),
         #[cfg(feature = "g_radio")]
         ScanMd => clamp_step(cur, up, 0, 2),
         #[cfg(feature = "g_radio")]
@@ -1210,7 +1344,7 @@ fn adjust(api: &Api, st: &mut ItemsState, item: SettingItem, up: bool) {
         #[cfg(feature = "g_audio")]
         Beep | Tail | Vox => 1 - cur,
         #[cfg(feature = "g_audio")]
-        Roge => clamp_step(cur, up, 0, 2),
+        Roge => clamp_step(cur, up, 0, 5),
         #[cfg(feature = "g_audio")]
         VoxDly => clamp_step(cur, up, 0, 15),
         #[cfg(feature = "g_audio")]
@@ -1268,13 +1402,17 @@ fn apply(api: &Api, st: &mut ItemsState, item: SettingItem, v: i32) {
         #[cfg(feature = "g_radio")]
         Sql => st.settings.sql_level = v as u8,
         #[cfg(feature = "g_radio")]
+        Mic => st.settings.boot_text_and_tune[MIC_GAIN_AT] = v as u8,
+        #[cfg(feature = "g_radio")]
         Step => st.side_cfg.freq_step = v as u8,
         #[cfg(feature = "g_radio")]
         Tot => st.settings.tot_level = v as u8,
         #[cfg(feature = "g_radio")]
         Tdr => st.settings.dual_standby = v != 0,
         #[cfg(feature = "g_radio")]
-        BusyLock => st.settings.busy_lock = v != 0,
+        BusyLock => st.side_cfg.busy_lock = v != 0,
+        #[cfg(feature = "g_radio")]
+        ChScan => st.side_cfg.scan_add = v != 0,
         #[cfg(feature = "g_radio")]
         TxForbid => st.settings.tx_forbid = v != 0,
         #[cfg(feature = "g_radio")]
@@ -1286,7 +1424,7 @@ fn apply(api: &Api, st: &mut ItemsState, item: SettingItem, v: i32) {
         #[cfg(feature = "g_radio")]
         TxCts => st.side_cfg.subaudio_tx_code = (api.subaudio_code_of_index)(v),
         #[cfg(feature = "g_radio")]
-        Scrm => st.settings.scramble_level = v as u8,
+        Scrm => st.side_cfg.scramble = v as u8,
         #[cfg(feature = "g_radio")]
         Sftd => st.side_cfg.freq_dir = v as u8,
         #[cfg(feature = "g_radio")]
@@ -1481,6 +1619,25 @@ fn value_text_for(
     }
 
     match item {
+        #[cfg(feature = "g_radio")]
+        ChScan => {
+            if (api.settings_get)(8) == 0 {
+                write_str(out, "N/A")
+            } else {
+                on_off(out, current_value(api, st, item))
+            }
+        }
+        #[cfg(feature = "g_radio")]
+        Mic => {
+            let v = current_value(api, st, item);
+            if v == 0 {
+                write_str(out, "DEFAULT")
+            } else {
+                let mut w = Out::new(out);
+                w.u32(v as u32 - 1, 1);
+                w.len
+            }
+        }
         #[cfg(feature = "g_system")]
         Info => {
             let s = if st.info_page == 0 {
@@ -1668,6 +1825,9 @@ fn value_text_for(
             match current_value(api, st, item) {
                 1 => "ROGER",
                 2 => "MDC1200",
+                3 => "COIN",
+                4 => "MORSE K",
+                5 => "CHIRP",
                 _ => "OFF",
             },
         ),

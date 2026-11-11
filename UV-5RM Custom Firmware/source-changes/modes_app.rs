@@ -5,36 +5,76 @@ use super::{
 };
 use crate::device::keypad::{KeyEvent, KeyEventKind, KeyId};
 use crate::device::radio::{FreqRanges, SubAudio};
-use crate::flash_map::Settings;
+use crate::device::storage::Storage;
+use crate::flash_map::{addr, Settings};
 use cortex_m::peripheral::SYST;
 
-pub(crate) struct ChanMode {
-    pub name: &'static str,
-    pub short: &'static str,
-    /// Inclusive channel numbers as printed on the reference sheet (from 1).
-    ranges: &'static [(u16, u16)],
+/// Bands are made on the PC page. Band `i` (0-15) is a 32-byte record in
+/// the spare channel slot `BAND_SLOT + i`: its name in bytes 0-15, a short
+/// name for the status bar in 16-20, and `BAND_MARK` in byte 31 while it's
+/// in use. The bands in use come first, with no gaps.
+///
+/// A channel is in band `i` when bit `i` of its record bytes 17-18 (the
+/// middle of the otherwise unused decoder code) is set.
+pub(crate) const BAND_SLOT: u16 = 1000;
+pub(crate) const MAX_BANDS: u8 = 16;
+const BAND_MARK: u8 = b'B';
+pub(crate) const BAND_LABEL: usize = 21;
+pub(crate) const BAND_NAME: usize = 16;
+
+/// `chan_mode` values: 0 = ALL, 1..=16 = band 0-15, `CUSTOM` = a typed
+/// frequency range.
+const CUSTOM: u8 = MAX_BANDS + 1;
+
+fn read_band(storage: &mut Storage, i: u8) -> Option<[u8; 32]> {
+    let mut b = [0u8; 32];
+    let at = addr::CHAN_ADDR + (BAND_SLOT + i as u16) as u32 * addr::CHAN_SIZE;
+    storage.read_raw(at, &mut b);
+    (b[31] == BAND_MARK).then_some(b)
 }
 
-const ALL: &[(u16, u16)] = &[(1, MAX_CHANNEL_NUM + 1)];
+pub(crate) fn band_count(storage: &mut Storage) -> u8 {
+    let mut n = 0;
+    while n < MAX_BANDS && read_band(storage, n).is_some() {
+        n += 1;
+    }
+    n
+}
 
-pub(crate) const MODES: [ChanMode; 13] = [
-    ChanMode { name: "ALL", short: "ALL", ranges: ALL },
-    ChanMode { name: "WEATHER", short: "WX", ranges: &[(1, 7)] },
-    ChanMode { name: "POLICE FIRE EMS", short: "PD/FD", ranges: &[(14, 105)] },
-    ChanMode { name: "FED & GOV", short: "FED", ranges: &[(106, 146)] },
-    ChanMode { name: "UTILITIES", short: "UTIL", ranges: &[(147, 157)] },
-    ChanMode { name: "RAILROAD", short: "RAIL", ranges: &[(158, 167)] },
-    ChanMode { name: "AIR TRAFFIC", short: "AIR", ranges: &[(168, 233)] },
-    ChanMode { name: "REPEATERS", short: "RPT", ranges: &[(234, 304), (327, 344)] },
-    ChanMode { name: "FRS", short: "FRS", ranges: &[(305, 326)] },
-    ChanMode { name: "GMRS", short: "GMRS", ranges: &[(305, 344)] },
-    ChanMode { name: "MURS", short: "MURS", ranges: &[(345, 349)] },
-    ChanMode { name: "FRS GMRS MURS", short: "F/G/M", ranges: &[(305, 349)] },
-    // Channel list stays open here; the scan itself sweeps the typed range.
-    ChanMode { name: "CUSTOM RANGE", short: "RANGE", ranges: ALL },
-];
+/// The band's name and short name, or `None` for ALL, CUSTOM or a band
+/// that no longer exists.
+pub(crate) fn band_label(storage: &mut Storage, mode: u8) -> Option<[u8; BAND_LABEL]> {
+    if mode == 0 || mode > MAX_BANDS {
+        return None;
+    }
+    let b = read_band(storage, mode - 1)?;
+    let mut label = [0u8; BAND_LABEL];
+    label.copy_from_slice(&b[..BAND_LABEL]);
+    Some(label)
+}
 
-const CUSTOM: u8 = MODES.len() as u8 - 1;
+/// Menu rows: ALL, each band, then CUSTOM RANGE.
+pub(crate) fn menu_mode(count: u8, row: usize) -> u8 {
+    if row <= count as usize {
+        row as u8
+    } else {
+        CUSTOM
+    }
+}
+
+pub(crate) fn menu_row(count: u8, mode: u8) -> usize {
+    if mode == CUSTOM {
+        count as usize + 1
+    } else {
+        mode as usize
+    }
+}
+
+/// Text up to the first blank (0x00 or 0xFF) byte.
+pub(crate) fn label_str(bytes: &[u8]) -> &str {
+    let end = bytes.iter().position(|&c| c == 0 || c == 0xFF).unwrap_or(bytes.len());
+    crate::ui::ascii_str(&bytes[..end])
+}
 
 const DEFAULT_RANGE_HZ: (u32, u32) = (144_000_000, 148_000_000);
 
@@ -43,17 +83,23 @@ const DEFAULT_RANGE_HZ: (u32, u32) = (144_000_000, 148_000_000);
 /// that the settings app and CPS tools depend on.
 const STORE_MAGIC: u8 = b'M';
 
-pub(super) fn restore(settings: &Settings) -> (u8, u32, u32) {
+pub(super) fn restore(settings: &Settings, storage: &mut Storage) -> (u8, u32, u32) {
     let b = &settings.boot_text_line2;
     if b[0] != STORE_MAGIC || b[1] > CUSTOM {
         return (0, DEFAULT_RANGE_HZ.0, DEFAULT_RANGE_HZ.1);
     }
+    // A band deleted from the PC since last time falls back to ALL.
+    let mode = if b[1] == 0 || b[1] == CUSTOM || band_label(storage, b[1]).is_some() {
+        b[1]
+    } else {
+        0
+    };
     let lo = u32::from_le_bytes([b[2], b[3], b[4], b[5]]);
     let hi = u32::from_le_bytes([b[6], b[7], b[8], b[9]]);
     if range_valid(lo, hi) {
-        (b[1], lo, hi)
+        (mode, lo, hi)
     } else {
-        (b[1], DEFAULT_RANGE_HZ.0, DEFAULT_RANGE_HZ.1)
+        (mode, DEFAULT_RANGE_HZ.0, DEFAULT_RANGE_HZ.1)
     }
 }
 
@@ -71,32 +117,27 @@ fn range_valid(lo: u32, hi: u32) -> bool {
     lo < hi && hw.allows(lo) && hw.allows(hi)
 }
 
-/// `num` is a flash slot, counting from 0.
-pub(super) fn contains(mode: u8, num: u16) -> bool {
-    let printed = num + 1;
-    MODES[mode as usize]
-        .ranges
-        .iter()
-        .any(|&(a, b)| (a..=b).contains(&printed))
+/// Whether channel `num` (a flash slot, from 0) is in the selected band.
+pub(super) fn contains(app: &mut App, num: u16) -> bool {
+    let mode = app.chan_mode;
+    if mode == 0 || mode == CUSTOM {
+        return true;
+    }
+    let mask = (app.storage.read_channel(num).decoder_code >> 8) as u16;
+    mask & 1 << (mode - 1) != 0
 }
 
 pub(super) fn is_custom(mode: u8) -> bool {
     mode == CUSTOM
 }
 
-fn first_channel(app: &mut App, mode: u8) -> Option<u16> {
-    for &(a, b) in MODES[mode as usize].ranges {
-        for printed in a..=b {
-            if !app.storage.is_channel_empty(printed - 1) {
-                return Some(printed - 1);
-            }
-        }
-    }
-    None
+fn first_channel(app: &mut App) -> Option<u16> {
+    (0..=MAX_CHANNEL_NUM).find(|&n| !app.storage.is_channel_empty(n) && contains(app, n))
 }
 
 pub(super) fn open_menu(app: &mut App) {
-    app.mode_menu_index = app.chan_mode as usize;
+    let count = band_count(&mut app.storage);
+    app.mode_menu_index = menu_row(count, app.chan_mode);
     app.input.clear();
     app.mode = Mode::ModeMenu;
 }
@@ -110,12 +151,13 @@ fn open_range(app: &mut App) {
 
 /// Two rising notes; the second climbs with the mode's place in the list.
 fn play_mode_cue(app: &mut App, syst: &mut SYST) {
-    let tones = [(88, 70), (60 + 8 * app.chan_mode as u16, 90)];
+    let tones = [(88, 7), (60u8.wrapping_add(8u8.wrapping_mul(app.chan_mode)), 9)];
     app.radio.play_cue(syst, &tones);
 }
 
-fn select(app: &mut App, syst: &mut SYST, index: usize, then_scan: bool) {
-    app.chan_mode = index as u8;
+fn select(app: &mut App, syst: &mut SYST, mode: u8, then_scan: bool) {
+    app.chan_mode = mode;
+    app.band_label = band_label(&mut app.storage, mode).unwrap_or([0; BAND_LABEL]);
     persist(app);
     app.mode = Mode::Standby;
     app.reset_key_idle();
@@ -127,13 +169,8 @@ fn select(app: &mut App, syst: &mut SYST, index: usize, then_scan: bool) {
     }
 
     let current = app.sides[app.master].channel_num;
-    let keep = !app.storage.is_channel_empty(current)
-        && contains(app.chan_mode, current);
-    let target = if keep {
-        Some(current)
-    } else {
-        first_channel(app, app.chan_mode)
-    };
+    let keep = !app.storage.is_channel_empty(current) && contains(app, current);
+    let target = if keep { Some(current) } else { first_channel(app) };
     match target {
         Some(num) => {
             side_ops::load_channel_num(app, num);
@@ -149,7 +186,8 @@ fn select(app: &mut App, syst: &mut SYST, index: usize, then_scan: bool) {
 }
 
 pub(super) fn dispatch_menu(app: &mut App, syst: &mut SYST, ev: KeyEvent) {
-    let len = MODES.len();
+    let count = band_count(&mut app.storage);
+    let len = count as usize + 2;
     match (ev.kind, ev.key) {
         (KeyEventKind::Single | KeyEventKind::Repeat, KeyId::Up) => {
             app.mode_menu_index = (app.mode_menu_index + len - 1) % len;
@@ -158,11 +196,11 @@ pub(super) fn dispatch_menu(app: &mut App, syst: &mut SYST, ev: KeyEvent) {
             app.mode_menu_index = (app.mode_menu_index + 1) % len;
         }
         (KeyEventKind::Single, KeyId::Menu) => {
-            select(app, syst, app.mode_menu_index, false);
+            select(app, syst, menu_mode(count, app.mode_menu_index), false);
         }
         // Hold MENU: pick the mode and start scanning it right away.
         (KeyEventKind::Long, KeyId::Menu) => {
-            select(app, syst, app.mode_menu_index, true);
+            select(app, syst, menu_mode(count, app.mode_menu_index), true);
         }
         (KeyEventKind::Single, KeyId::Exit | KeyId::Band) => {
             app.mode = Mode::Standby;
@@ -240,7 +278,7 @@ pub(super) fn dispatch_range(app: &mut App, syst: &mut SYST, ev: KeyEvent) {
             } else {
                 app.range_err = true;
                 app.range_stage = 0;
-                app.radio.play_cue(syst, &[(40, 200)]);
+                app.radio.play_cue(syst, &[(40, 20)]);
             }
         }
         KeyId::Exit if ev.kind == KeyEventKind::Single => {
@@ -259,11 +297,19 @@ impl<'a> App<'a> {
     pub fn chan_mode_index(&self) -> usize {
         self.chan_mode as usize
     }
-    pub fn chan_mode_name(&self) -> &'static str {
-        MODES[self.chan_mode as usize].name
+    pub fn chan_mode_name(&self) -> &str {
+        match self.chan_mode {
+            0 => "ALL",
+            CUSTOM => "CUSTOM RANGE",
+            _ => label_str(&self.band_label[..BAND_NAME]),
+        }
     }
-    pub fn chan_mode_short(&self) -> &'static str {
-        MODES[self.chan_mode as usize].short
+    pub fn chan_mode_short(&self) -> &str {
+        match self.chan_mode {
+            0 => "ALL",
+            CUSTOM => "RANGE",
+            _ => label_str(&self.band_label[BAND_NAME..]),
+        }
     }
     pub fn mode_menu_index(&self) -> usize {
         self.mode_menu_index

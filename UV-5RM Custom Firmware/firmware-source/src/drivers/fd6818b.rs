@@ -475,14 +475,11 @@ enum SubaudioMatchBit {
     DcsInverted,
 }
 
-/// Voice-inversion scramble groups.
-/// FIXME: the 4th value
-const SCRAMBLE_TABLE: [u16; 3] = [0x8517, 0x770E, 0x7A90];
-/// `REG_DEVIATION` value while a scramble group is active (vs
-/// `DEVIATION_VALUE` normally). Not sourced from a confirmed BK4829
-/// reference (the driver this was cross-checked against has no scramble
-/// feature) -- carried over from BK4819 unverified.
-const DEVIATION_SCRAMBLE_VALUE: u16 = 0x0450;
+/// Voice-inversion scramble groups: the eight carrier words in the factory
+/// firmware for the NRF version of this radio, 1032 apart.
+const SCRAMBLE_TABLE: [u16; 8] = [
+    0x6CE4, 0x70EC, 0x74F5, 0x78FD, 0x7D06, 0x810E, 0x8517, 0x891F,
+];
 
 /// 26 MHz xtal calibration table
 /// The index is derived from the XTAL_ADJUST byte in spi flash
@@ -502,7 +499,9 @@ const POWER_RX_VALUE: u16 = 0x9F1F;
 const POWER_SLEEP_VALUE: u16 = POWER_UP_VALUE & 0xFFF0;
 
 const DEVIATION_VALUE: u16 = 0x3516;
-const MIC_SENS_VALUE: u16 = 0xE920;
+/// Low 7 bits at 127: the loudest and clearest of the levels compared by ear
+/// on a real radio. They don't act as a simple volume: 63 was quieter than 40.
+const MIC_SENS_VALUE: u16 = 0xE97F;
 const DAC_GAIN: u16 = 15;
 
 pub struct Fd6818<'a> {
@@ -512,6 +511,7 @@ pub struct Fd6818<'a> {
     vol_wideband: u8,
     vol_narrowband: u8,
     mic_mod_depth: u8,
+    mic_gain_setting: u8,
     cts_mod_depth: u8,
     dcs_mod_depth: u8,
     pa_target: u8,
@@ -532,6 +532,7 @@ impl<'a> Fd6818<'a> {
             vol_wideband: 25,
             vol_narrowband: 25,
             mic_mod_depth: 0,
+            mic_gain_setting: 0,
             cts_mod_depth: 0,
             dcs_mod_depth: 0,
             pa_target: 100,
@@ -797,18 +798,17 @@ impl<'a> Fd6818<'a> {
     }
 
     /// Selects a voice-inversion scramble group. `group == 0` turns
-    /// scrambling off; `1..=3` selects a group
+    /// scrambling off; `1..=8` selects a group. Tested on a real radio, this
+    /// chip only descrambles received audio: no bit of REG 0x31 scrambled the
+    /// transmitted voice, so TX deviation is left as it is.
     pub fn set_scramble(&mut self, syst: &mut SYST, group: u8) {
         let scramble_reg = self.read_reg(syst, REG_SCRAMBLE);
         if group == 0 {
             self.write_reg(syst, REG_SCRAMBLE, scramble_reg & !0x0002);
-            self.write_reg(syst, REG_DEVIATION, DEVIATION_VALUE);
         } else {
-            let idx = (group.min(3) - 1) as usize;
+            let idx = (group.min(8) - 1) as usize;
             self.write_reg(syst, REG_SCRAMBLE, scramble_reg | 0x0002);
             self.write_reg(syst, REG_TONE_FREQ, SCRAMBLE_TABLE[idx]);
-            let dev = self.read_reg(syst, REG_DEVIATION) & 0xF000;
-            self.write_reg(syst, REG_DEVIATION, dev | DEVIATION_SCRAMBLE_VALUE);
         }
     }
 
@@ -1085,9 +1085,19 @@ impl<'a> Fd6818<'a> {
         self.write_reg(syst, REG_RXAGC_6, agc6);
     }
 
+    pub fn set_mic_gain_setting(&mut self, setting: u8) {
+        self.mic_gain_setting = setting;
+    }
+
     pub fn apply_tx_mic_gain(&mut self, syst: &mut SYST) {
-        let gain = (self.mic_mod_depth % 32) as u16;
-        self.write_reg(syst, REG_MIC_SENS, (MIC_SENS_VALUE & 0xFFE0) | gain);
+        // A setting of 1..=128 replaces the low 7 bits; anything else is the
+        // default. The calibration byte isn't used: its level was too quiet.
+        let value = if (1..=128).contains(&self.mic_gain_setting) {
+            (MIC_SENS_VALUE & 0xFF80) | (self.mic_gain_setting - 1) as u16
+        } else {
+            MIC_SENS_VALUE
+        };
+        self.write_reg(syst, REG_MIC_SENS, value);
     }
 
     /// Configures the transmitted sub-audible tone/code.

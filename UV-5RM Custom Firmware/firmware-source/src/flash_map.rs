@@ -249,6 +249,17 @@ impl Channel {
         self.flags & 0x04 != 0
     }
 
+    /// Voice scramble group, 0 (off) to 8, in the low byte of the unused
+    /// decoder code. A blank byte reads as off.
+    pub fn scramble(&self) -> u8 {
+        let v = self.decoder_code as u8;
+        if v <= 8 {
+            v
+        } else {
+            0
+        }
+    }
+
     pub fn set_scan_add(&mut self, on: bool) {
         if on {
             self.flags |= 0x04;
@@ -401,6 +412,25 @@ impl VfoMode {
         self.dtmf_group = (self.dtmf_group & 0xe0) | idx;
     }
 
+    /// Scramble group and busy lock for frequency mode, in the unused decoder
+    /// code like a channel's.
+    pub fn scramble(&self) -> u8 {
+        let v = self.decoder_code as u8;
+        if v <= 8 {
+            v
+        } else {
+            0
+        }
+    }
+
+    pub fn busy_lock(&self) -> bool {
+        (self.decoder_code >> 8) as u8 == 1
+    }
+
+    pub fn set_scramble_busy(&mut self, scramble: u8, busy_lock: bool) {
+        self.decoder_code = scramble as u32 | (busy_lock as u32) << 8;
+    }
+
     pub fn wide_narrow(&self) -> bool {
         self.vfo_flags & 0x40 != 0
     }
@@ -530,7 +560,7 @@ impl Settings {
         rptrl: 0,
         vox_delay: 5, // 1.0s
         battery_cal_raw: 2537,
-        side1_short: 5, // FM radio (physical "FM" button)
+        side1_short: 5, // Opens TEXT (the physical CALL button)
         side1_long: 0,  // None
         side2_short: 8, // Flashlight (physical flashlight button)
         side2_long: 0,  // None
@@ -558,7 +588,7 @@ impl Settings {
             vox_level: buf[7].clamp(1, 9),
             tot_level: buf[8],
             beeps_switch: buf[9] != 0,
-            roger_tone: buf[10].min(2),
+            roger_tone: buf[10].min(5),
             scramble_level: buf[11],
             rtone: buf[12].min(3),
             scan_mode: buf[13].min(2),

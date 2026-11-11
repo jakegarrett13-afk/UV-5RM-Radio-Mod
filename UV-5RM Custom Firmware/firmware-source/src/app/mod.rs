@@ -122,6 +122,8 @@ pub struct App<'a> {
     settings: flash_map::Settings,
     launcher_index: usize,
     chan_mode: u8,
+    /// Name and short name of the selected band, read once when it's chosen.
+    band_label: [u8; modes::BAND_LABEL],
     mode_menu_index: usize,
     range_lo_hz: u32,
     range_hi_hz: u32,
@@ -224,6 +226,8 @@ impl<'a> App<'a> {
                 reversed: false,
                 rx_only: false,
                 ani_target: None,
+                scramble: 0,
+                busy_lock: false,
                 cfg: default_cfg,
                 name: [0; 12],
                 vfo_backup: side::VfoBackup {
@@ -235,6 +239,8 @@ impl<'a> App<'a> {
                     subaudio_tx: default_cfg.subaudio_tx,
                     subaudio_rx: default_cfg.subaudio_rx,
                     ani_target: None,
+                    scramble: 0,
+                    busy_lock: false,
                 },
             },
             side::Side {
@@ -248,6 +254,8 @@ impl<'a> App<'a> {
                 reversed: false,
                 rx_only: false,
                 ani_target: None,
+                scramble: 0,
+                busy_lock: false,
                 cfg: default_cfg,
                 name: [0; 12],
                 vfo_backup: side::VfoBackup {
@@ -259,6 +267,8 @@ impl<'a> App<'a> {
                     subaudio_tx: default_cfg.subaudio_tx,
                     subaudio_rx: default_cfg.subaudio_rx,
                     ani_target: None,
+                    scramble: 0,
+                    busy_lock: false,
                 },
             },
         ];
@@ -307,7 +317,8 @@ impl<'a> App<'a> {
             }
         }
 
-        let (chan_mode, range_lo_hz, range_hi_hz) = modes::restore(&settings);
+        let (chan_mode, range_lo_hz, range_hi_hz) = modes::restore(&settings, &mut storage);
+        let band_label = modes::band_label(&mut storage, chan_mode).unwrap_or([0; modes::BAND_LABEL]);
 
         radio.set_frequency(sides[0].cfg.freq_hz);
         radio.set_tx_frequency(sides[0].cfg.tx_freq_hz);
@@ -315,6 +326,7 @@ impl<'a> App<'a> {
         radio.set_subaudio_tx(sides[0].cfg.subaudio_tx);
         radio.set_subaudio_rx(sides[0].cfg.subaudio_rx);
         radio.set_modulation(sides[0].cfg.modulation);
+        radio.set_scramble_value(sides[0].scramble);
 
         let mut app = App {
             radio,
@@ -326,7 +338,8 @@ impl<'a> App<'a> {
             settings,
             launcher_index: 0,
             chan_mode,
-            mode_menu_index: chan_mode as usize,
+            band_label,
+            mode_menu_index: 0,
             range_lo_hz,
             range_hi_hz,
             range_stage: 0,
@@ -384,8 +397,8 @@ impl<'a> App<'a> {
         self.radio.set_tail_elimination(s.tail_elimination);
         self.radio.set_rptrl(s.rptrl);
         self.radio.set_beeps_enabled(s.beeps_switch);
+        self.radio.set_mic_gain_setting(s.boot_text_line2[10]);
         self.radio.set_roger_tone(RogerTone::from_u8(s.roger_tone));
-        self.radio.set_scramble_level(syst, s.scramble_level);
         self.radio.set_rit_offset(s.rit_offset as i32 * 10);
         self.radio
             .set_tx_allowed(BandLock::from_u8(s.band_lock).tx_ranges());
@@ -1031,6 +1044,4 @@ impl<'a> App<'a> {
     }
 }
 
-pub(crate) fn modes_table() -> &'static [modes::ChanMode] {
-    &modes::MODES
-}
+pub(crate) use modes::{band_count, band_label, label_str, menu_row, BAND_NAME};

@@ -9,7 +9,7 @@ APPS = [("SETTINGS", ["menu", "radio", "system"]), ("CHAN MGR", ["chanmgr"]), ("
         ("SCANQT", ["scanqt"]), ("SPECTRUM", ["spectrum"]), ("FM", ["fm"]),
         ("RPT FINDER", ["rptfind"]), ("BAND SWEEP", ["bandsweep"]), ("FOX HUNT", ["foxhunt"]),
         ("SEARCH/QT SCAN", ["qtscan2", "search2"]),
-        ("TEXT", ["textapp"])]
+        ("TEXT", ["textapp"]), ("SCRAMBLE LAB", ["scramblelab"])]
 
 lib = os.path.join(fw_root, "abi", "src", "lib.rs")
 build_hash = zlib.crc32(open(lib, "rb").read()) & 0xFFFFFFFF

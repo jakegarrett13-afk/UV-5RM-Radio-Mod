@@ -54,9 +54,7 @@ fn find_next_scan_channel(
         } else {
             n - 1
         };
-        if app.storage.is_channel_empty(n)
-            || !modes::contains(app.chan_mode, n)
-        {
+        if app.storage.is_channel_empty(n) || !modes::contains(app, n) {
             continue;
         }
         if app.storage.read_channel(n).scan_add() {

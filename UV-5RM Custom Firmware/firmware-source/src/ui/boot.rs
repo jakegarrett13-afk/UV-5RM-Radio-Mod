@@ -84,7 +84,7 @@ fn ascii_line(raw: &[u8; 16]) -> &str {
         .iter()
         .position(|&b| b == 0x00 || b == 0xFF)
         .unwrap_or(raw.len());
-    core::str::from_utf8(&raw[..end]).unwrap_or("")
+    super::ascii_str(&raw[..end])
 }
 
 fn text_lines(settings: &Settings) -> (&str, &str) {
@@ -214,6 +214,33 @@ pub fn draw_message<D>(
 pub const LOGO_CHUNK_ROWS: u16 = 4;
 pub const LOGO_CHUNK_BYTES: usize =
     flash_map::BOOT_LOGO_WIDTH as usize * LOGO_CHUNK_ROWS as usize * 2;
+
+/// A band of grey TV snow across the screen; `seed` is a xorshift state.
+pub fn draw_snow<D>(lcd: &mut D, y0: u16, rows: u16, seed: &mut u32)
+where
+    D: DrawTarget<Color = Rgb565>,
+{
+    let area = Rectangle::new(
+        Point::new(0, y0 as i32),
+        Size::new(flash_map::BOOT_LOGO_WIDTH as u32, rows as u32),
+    );
+    let n = flash_map::BOOT_LOGO_WIDTH as u32 * rows as u32;
+    let pixels = (0..n).map(|_| {
+        // 5-bit grey into all three channels: v << 11 | v << 6 | v.
+        let v = (next_random(seed) >> 27) as u16;
+        Rgb565::from(RawU16::new(v * 0x0841))
+    });
+    lcd.fill_contiguous(&area, pixels).ok();
+}
+
+pub fn next_random(seed: &mut u32) -> u32 {
+    let mut x = *seed;
+    x ^= x << 13;
+    x ^= x >> 17;
+    x ^= x << 5;
+    *seed = x;
+    x
+}
 
 pub fn draw_logo_chunk<D>(lcd: &mut D, y0: u16, chunk: &[u8])
 where

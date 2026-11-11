@@ -13,7 +13,9 @@ use crate::ui;
 const HANDSHAKE: &[u8] = b"PROGRAMBF-5RH";
 const ACK: u8 = 0x06;
 const IDLE_TIMEOUT_MS: u32 = 2000;
-const MAX_CHANNEL_NUM: u16 = 999;
+/// Channels are slots 0-999; the 16 band records after them (see
+/// `app::modes`) are read and written the same way.
+const MAX_CHANNEL_NUM: u16 = 1015;
 
 const SAT_TABLE_BASE: u32 = addr::OVERLAY_DATA_ADDR;
 /// 20 records * 256 bytes, spanning two 4KB sectors.

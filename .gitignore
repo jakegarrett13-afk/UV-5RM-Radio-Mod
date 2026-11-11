@@ -9,3 +9,5 @@ radio_apps.txt
 target/
 __pycache__/
 *.pyc
+# Test copy of the channel page; it embeds a real radio's channel dump.
+channels_test.html

@@ -9,10 +9,17 @@ use cortex_m::peripheral::SYST;
 
 const SEND_TAIL_HOLD_MS: u32 = 300;
 
-/// 1000Hz/60ms
-const BEEP_TONES: [(u16, u32); 1] = [(100, 60)];
+/// Tone sequences are `(hz / 10, ms / 10)` pairs; a frequency of 0 is a rest.
+/// 600Hz/60ms
+const BEEP_TONES: [(u8, u8); 1] = [(60, 6)];
 /// 1000Hz/80ms, 850Hz/80ms
-const ROGER_TONES: [(u16, u32); 2] = [(100, 80), (85, 80)];
+const ROGER_TONES: [(u8, u8); 2] = [(100, 8), (85, 8)];
+/// B5 then a held E6: the classic coin-pickup interval.
+const COIN_TONES: [(u8, u8); 2] = [(99, 8), (132, 35)];
+/// Morse K, "over": dah dit dah at 800Hz.
+const MORSE_K_TONES: [(u8, u8); 5] = [(80, 15), (0, 5), (80, 5), (0, 5), (80, 15)];
+/// Three quick rising notes.
+const CHIRP_TONES: [(u8, u8); 3] = [(90, 4), (135, 4), (180, 6)];
 
 const TONE_SETTLE_MS: u32 = 2;
 
@@ -38,6 +45,9 @@ pub enum RogerTone {
     Roger,
     /// MDC1200 burst
     Mdc1200,
+    Coin,
+    MorseK,
+    Chirp,
 }
 
 impl RogerTone {
@@ -45,6 +55,9 @@ impl RogerTone {
         match v {
             1 => RogerTone::Roger,
             2 => RogerTone::Mdc1200,
+            3 => RogerTone::Coin,
+            4 => RogerTone::MorseK,
+            5 => RogerTone::Chirp,
             _ => RogerTone::Off,
         }
     }
@@ -503,13 +516,17 @@ impl<'a> Radio<'a> {
         self.beeps_enabled = enabled;
     }
 
+    pub fn set_mic_gain_setting(&mut self, setting: u8) {
+        self.fd6818.set_mic_gain_setting(setting);
+    }
+
     pub fn set_roger_tone(&mut self, tone: RogerTone) {
         self.roger_tone = tone;
     }
 
-    pub fn set_scramble_level(&mut self, syst: &mut SYST, level: u8) {
+    /// Takes effect the next time the radio enters RX or TX.
+    pub fn set_scramble_value(&mut self, level: u8) {
         self.scramble_level = level;
-        self.fd6818.set_scramble(syst, level);
     }
 
     pub fn set_rit_offset(&mut self, hz: i32) {
@@ -560,7 +577,7 @@ impl<'a> Radio<'a> {
     }
 
     /// Local-speaker-only tone sequence; never keys the transmitter.
-    pub fn play_cue(&mut self, syst: &mut SYST, tones: &[(u16, u32)]) {
+    pub fn play_cue(&mut self, syst: &mut SYST, tones: &[(u8, u8)]) {
         if !self.beeps_enabled || self.audio_open {
             return;
         }
@@ -571,8 +588,8 @@ impl<'a> Radio<'a> {
         self.play_tone_sequence(syst, tones, false, true);
     }
 
-    fn play_roger_tone(&mut self, syst: &mut SYST) {
-        self.play_tone_sequence(syst, &ROGER_TONES, true, false);
+    fn play_roger_tone(&mut self, syst: &mut SYST, tones: &[(u8, u8)]) {
+        self.play_tone_sequence(syst, tones, true, false);
     }
 
     /// Plays a boot-tune melody: `(tone_index, duration)` pairs,
@@ -649,24 +666,25 @@ impl<'a> Radio<'a> {
     fn play_tone_sequence(
         &mut self,
         syst: &mut SYST,
-        tones: &[(u16, u32)],
+        tones: &[(u8, u8)],
         key_tx: bool,
         local_speaker: bool,
     ) {
         let mut speaker_connected = false;
-        for &(hz_div_10, duration_ms) in tones {
-            self.fd6818.tx_single_tone_on(syst, hz_div_10, key_tx);
+        for &(hz_div_10, duration_10ms) in tones {
+            self.fd6818.tx_single_tone_on(syst, hz_div_10 as u16, key_tx);
             if local_speaker && !speaker_connected {
                 delay::ms(syst, TONE_SETTLE_MS);
                 self.set_speaker(true);
                 speaker_connected = true;
             }
-            delay::ms(syst, duration_ms);
+            delay::ms(syst, duration_10ms as u32 * 10);
         }
         if local_speaker {
             self.set_speaker(false);
         }
         self.fd6818.tx_single_tone_off(syst, key_tx);
+        self.fd6818.set_scramble(syst, self.scramble_level);
 
         let state = if self.audio_open {
             AfOutState::RxAudio
@@ -792,6 +810,9 @@ impl<'a> Radio<'a> {
     }
 
     pub fn stop_for_app(&mut self, syst: &mut SYST) {
+        // An app gets a clean audio path; leaving it re-enters RX, which
+        // restores the channel's scramble.
+        self.fd6818.set_scramble(syst, 0);
         self.fd6818.set_af_out(
             syst,
             AfOutState::Mute,
@@ -926,11 +947,16 @@ impl<'a> Radio<'a> {
         true
     }
 
-    pub fn end_tx(&mut self, syst: &mut SYST) {
-        match self.roger_tone {
+    /// `roger` is false when an app keyed the transmitter: its data shouldn't
+    /// get a roger tone tacked on.
+    pub fn end_tx(&mut self, syst: &mut SYST, roger: bool) {
+        match if roger { self.roger_tone } else { RogerTone::Off } {
             RogerTone::Off => {}
-            RogerTone::Roger => self.play_roger_tone(syst),
+            RogerTone::Roger => self.play_roger_tone(syst, &ROGER_TONES),
             RogerTone::Mdc1200 => self.play_mdc1200_tone(syst),
+            RogerTone::Coin => self.play_roger_tone(syst, &COIN_TONES),
+            RogerTone::MorseK => self.play_roger_tone(syst, &MORSE_K_TONES),
+            RogerTone::Chirp => self.play_roger_tone(syst, &CHIRP_TONES),
         }
         if self.tail_elimination {
             self.fd6818.send_tail(syst, true);

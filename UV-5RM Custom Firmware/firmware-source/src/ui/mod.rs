@@ -30,6 +30,17 @@ where
         .ok();
 }
 
+/// Text for the screen, or nothing if it isn't ASCII, which is all the fonts draw.
+/// Saves the 600 bytes of flash a full UTF-8 check costs.
+pub fn ascii_str(bytes: &[u8]) -> &str {
+    if bytes.is_ascii() {
+        // SAFETY: ASCII is always valid UTF-8.
+        unsafe { core::str::from_utf8_unchecked(bytes) }
+    } else {
+        ""
+    }
+}
+
 #[derive(Clone, Copy, PartialEq)]
 pub struct TextBuf<const N: usize> {
     buf: [u8; N],
@@ -45,7 +56,7 @@ impl<const N: usize> TextBuf<N> {
     }
 
     pub fn as_str(&self) -> &str {
-        core::str::from_utf8(&self.buf[..self.len]).unwrap_or("")
+        ascii_str(&self.buf[..self.len])
     }
 }
 

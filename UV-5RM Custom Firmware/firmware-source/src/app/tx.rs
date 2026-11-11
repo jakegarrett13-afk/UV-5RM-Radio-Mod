@@ -42,7 +42,7 @@ pub(super) fn set_ptt(app: &mut App, syst: &mut SYST, pressed: bool) {
             app.tx_prohibited = true;
             return;
         }
-        if app.settings.busy_lock && app.radio.rssi_open() {
+        if app.sides[app.master].busy_lock && app.radio.rssi_open() {
             return;
         }
 
@@ -59,6 +59,7 @@ pub(super) fn set_ptt(app: &mut App, syst: &mut SYST, pressed: bool) {
             app.radio.set_subaudio_tx(s.cfg.subaudio_tx);
             app.radio.set_subaudio_rx(s.cfg.subaudio_rx);
             app.radio.set_modulation(s.cfg.modulation);
+            app.radio.set_scramble_value(s.scramble);
             (tx_freq_hz, power)
         };
         reload_pa_calibration(app, tx_freq_hz, power);
@@ -94,7 +95,8 @@ pub(super) fn set_ptt(app: &mut App, syst: &mut SYST, pressed: bool) {
             if app.rtone_sounding {
                 app.rtone_sounding = false;
             }
-            app.radio.end_tx(syst);
+            let external = matches!(app.mode, Mode::External(_));
+            app.radio.end_tx(syst, !external);
             app.dual_hold_ticks = DUAL_STANDBY_HOLD_TICKS;
             app.vox_det_dly = VOX_HOLD_AFTER_PTT_TICKS;
             app.vox_work_dly = 0;

@@ -191,7 +191,8 @@ pub(crate) fn slot_name(app: &mut App, slot: u8, w: &mut dyn core::fmt::Write) {
         return;
     }
     let hdr = peek_header(app, slot);
-    let _ = write!(w, "{}", hdr.name_str());
+    let end = hdr.name.iter().position(|&b| b == 0).unwrap_or(hdr.name.len());
+    let _ = w.write_str(crate::ui::ascii_str(&hdr.name[..end]));
 }
 
 /// Load segment `seg` of the package in `slot` into the arena. Every segment
@@ -425,6 +426,13 @@ pub(crate) fn enter(app: &mut App, syst: &mut SYST, slot: u8) {
     }
 }
 
+/// Straight back to the main radio screen, skipping the app menu.
+pub(crate) fn close_to_radio(app: &mut App, syst: &mut SYST) {
+    let _ = call(app, syst, core::ptr::null_mut(), AppEvent::Leave);
+    leave_app(app, syst);
+    app.mode = Mode::Standby;
+}
+
 pub(crate) fn dispatch_key(app: &mut App, syst: &mut SYST, ev: KeyEvent) {
     let event = AppEvent::Key {
         id: ev.key as u8,
@@ -573,7 +581,7 @@ fn draw_text_with_font(
     Text::new(s, Point::new(x as i32, baseline_y), style)
         .draw(lcd)
         .ok();
-    (x as i32 + font.character_size.width as i32 * s.chars().count() as i32)
+    (x as i32 + font.character_size.width as i32 * s.len() as i32)
         as u16
 }
 
@@ -593,7 +601,7 @@ extern "C" fn api_draw_text(
     }
     let lcd = unsafe { &mut *lcd_ptr };
     let bytes = unsafe { core::slice::from_raw_parts(text, len as usize) };
-    let s = core::str::from_utf8(bytes).unwrap_or("");
+    let s = crate::ui::ascii_str(bytes);
     let fg = Rgb565::from(RawU16::new(fg));
     let bg = Rgb565::from(RawU16::new(bg));
     match font {
@@ -658,10 +666,8 @@ extern "C" fn api_tone_on(hz_div10: u16) {
 }
 
 #[inline(never)]
-extern "C" fn api_tone_off() {
-    let (app, syst) = (app_ref(), syst_ref());
-    app.radio_mut().rtone_off(syst);
-}
+/// Stubbed to make flash room, like the others marked so: no installed app calls it.
+extern "C" fn api_tone_off() {}
 
 #[inline(never)]
 extern "C" fn api_set_speaker(on: bool) {
@@ -669,9 +675,9 @@ extern "C" fn api_set_speaker(on: bool) {
 }
 
 #[inline(never)]
+/// Stubbed to make flash room: no installed app calls it.
 extern "C" fn api_read_mic_level() -> u8 {
-    let (app, syst) = (app_ref(), syst_ref());
-    app.radio_mut().read_mic_level(syst)
+    0
 }
 
 static mut FM_PARKED: bool = false;
@@ -836,17 +842,24 @@ extern "C" fn api_settings_get(id: u16) -> u32 {
         5 => s.obs_lat as u32,
         6 => s.obs_lon as u32,
         7 => app.chip_id() as u32,
+        8 => {
+            let side = &app.sides[app.master_index()];
+            if matches!(side.vfo_chan, ChVfoMode::Channel) {
+                side.channel_num as u32 + 1
+            } else {
+                0
+            }
+        }
         _ => 0,
     }
 }
 
+/// Stubbed to make flash room: only the satellite apps, not installed, use the clock.
 extern "C" fn api_utc_get() -> u32 {
-    app_ref().utc_secs()
+    0
 }
 
-extern "C" fn api_utc_set(secs: u32) {
-    app_ref().set_utc_secs(secs);
-}
+extern "C" fn api_utc_set(_secs: u32) {}
 
 static mut LIST_CACHE: Option<Cache> = None;
 
@@ -881,9 +894,7 @@ impl<'a> ListSource for BufferListSource<'a> {
                 .iter()
                 .position(|&b| b == 0)
                 .unwrap_or(row.label.len());
-            if let Ok(s) = core::str::from_utf8(&row.label[..end]) {
-                let _ = w.write_str(s);
-            }
+            let _ = w.write_str(crate::ui::ascii_str(&row.label[..end]));
         }
     }
 
@@ -895,9 +906,7 @@ impl<'a> ListSource for BufferListSource<'a> {
                     .iter()
                     .position(|&b| b == 0)
                     .unwrap_or(row.value.len());
-                if let Ok(s) = core::str::from_utf8(&row.value[..end]) {
-                    let _ = w.write_str(s);
-                }
+                let _ = w.write_str(crate::ui::ascii_str(&row.value[..end]));
                 return true;
             }
         }
@@ -960,7 +969,7 @@ extern "C" fn api_draw_list(
         let bytes =
             unsafe { core::slice::from_raw_parts(title, title_len as usize) };
         let end = bytes.iter().position(|&b| b == 0).unwrap_or(bytes.len());
-        core::str::from_utf8(&bytes[..end]).unwrap_or("")
+        crate::ui::ascii_str(&bytes[..end])
     };
     let rows_slice = if rows.is_null() {
         &[][..]
@@ -1077,9 +1086,8 @@ extern "C" fn api_set_sql_level(level: u8) {
 }
 
 #[inline(never)]
-extern "C" fn api_set_monitor(on: bool) {
-    app_ref().radio_mut().set_monitor(on);
-}
+/// Stubbed to make flash room: no installed app calls it.
+extern "C" fn api_set_monitor(_on: bool) {}
 
 #[inline(never)]
 extern "C" fn api_enter_rx() {
@@ -1095,31 +1103,14 @@ extern "C" fn api_retune_rx(hz: u32, wide: bool) {
 }
 
 #[inline(never)]
-extern "C" fn api_read_rf_gains(out: *mut u16) -> bool {
-    if out.is_null() {
-        return false;
-    }
-    let (app, syst) = (app_ref(), syst_ref());
-    let (lnas, lna, pga, if_gain) = app.radio_mut().read_rf_gains(syst);
-    unsafe {
-        out.write(lnas as u16);
-        out.add(1).write(lna as u16);
-        out.add(2).write(pga as u16);
-        out.add(3).write(if_gain);
-    }
-    true
+/// Stubbed to make flash room: no installed app reads the RF gain stages.
+extern "C" fn api_read_rf_gains(_out: *mut u16) -> bool {
+    false
 }
 
 #[inline(never)]
-extern "C" fn api_adjust_rf_gain(menu: u8, up: bool) {
-    if menu > 3 {
-        return;
-    }
-    let (app, syst) = (app_ref(), syst_ref());
-    // ABI is 0-based to match the order `read_rf_gains` writes them out; the
-    // driver numbers the same four stages from 1.
-    app.radio_mut().adjust_rf_gain(syst, menu + 1, up);
-}
+/// Stubbed to make flash room: no installed app adjusts the RF gain stages.
+extern "C" fn api_adjust_rf_gain(_menu: u8, _up: bool) {}
 
 /// Opt-in TX permission for the loaded app; see `Api::set_tx_enabled`.
 static mut APP_TX_ENABLED: bool = false;
@@ -1312,7 +1303,7 @@ extern "C" fn api_settings_commit(buf: *const u8, len: u16) -> bool {
     true
 }
 
-const SIDE_CFG_BYTES: usize = 14;
+const SIDE_CFG_BYTES: usize = 17;
 
 #[inline(never)]
 extern "C" fn api_side_cfg_read(buf: *mut u8, len: u16) -> bool {
@@ -1334,6 +1325,10 @@ extern "C" fn api_side_cfg_read(buf: *mut u8, len: u16) -> bool {
     let ani: i16 = s.ani_target.map_or(-1, |t| t as i16);
     out[11..13].copy_from_slice(&ani.to_le_bytes());
     out[13] = s.freq_step;
+    out[14] = s.scramble;
+    out[15] = s.busy_lock as u8;
+    let (is_channel, num) = (matches!(s.vfo_chan, ChVfoMode::Channel), s.channel_num);
+    out[16] = (is_channel && app.storage_mut().read_channel(num).scan_add()) as u8;
     unsafe { core::ptr::copy_nonoverlapping(out.as_ptr(), buf, out.len()) };
     true
 }
@@ -1353,6 +1348,8 @@ extern "C" fn api_side_cfg_write(buf: *const u8, len: u16) -> bool {
     let ani_raw = i16::from_le_bytes([raw[11], raw[12]]);
     let ani_target = (ani_raw >= 0).then_some(ani_raw as u8);
     let freq_step = raw[13];
+    let scramble = raw[14].min(8);
+    let busy_lock = raw[15] != 0;
 
     let (app, syst) = (app_ref(), syst_ref());
     let m = app.master_index();
@@ -1363,6 +1360,8 @@ extern "C" fn api_side_cfg_write(buf: *const u8, len: u16) -> bool {
     s.cfg.subaudio_tx = subaudio_tx;
     s.ani_target = ani_target;
     s.freq_step = freq_step;
+    s.scramble = scramble;
+    s.busy_lock = busy_lock;
     match s.vfo_chan {
         ChVfoMode::Vfo => {
             s.freq_dir = dir;

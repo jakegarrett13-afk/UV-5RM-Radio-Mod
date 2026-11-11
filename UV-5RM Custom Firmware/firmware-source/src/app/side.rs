@@ -24,6 +24,8 @@ pub(super) struct VfoBackup {
     pub subaudio_tx: SubAudio,
     pub subaudio_rx: SubAudio,
     pub ani_target: Option<u8>,
+    pub scramble: u8,
+    pub busy_lock: bool,
 }
 
 #[derive(Clone)]
@@ -42,6 +44,8 @@ pub(super) struct Side {
     /// index), used when there's no runtime override selected. Loaded from
     /// `Channel`/`VfoMode`'s `dtmf_group` low 5 bits.
     pub ani_target: Option<u8>,
+    pub scramble: u8,
+    pub busy_lock: bool,
     pub cfg: ChannelConfig,
     /// Raw 12-byte channel name (only meaningful when `vfo_chan ==
     /// Channel`); `[0; 12]` in VFO mode or for an unnamed channel.
@@ -85,6 +89,8 @@ impl Side {
         self.rx_freq_hz = vfo.freq_deci_hz() * 10;
         self.freq_dir = vfo.freq_dir();
         self.ani_target = vfo.ani_target();
+        self.scramble = vfo.scramble();
+        self.busy_lock = vfo.busy_lock();
         self.offset_hz = vfo.offset_deci_hz() * 10;
         self.cfg.wide_band = !vfo.wide_narrow();
         self.cfg.power = power_from_raw(vfo.tx_power);
@@ -99,6 +105,8 @@ impl Side {
             subaudio_tx: self.cfg.subaudio_tx,
             subaudio_rx: self.cfg.subaudio_rx,
             ani_target: self.ani_target,
+            scramble: self.scramble,
+            busy_lock: self.busy_lock,
         };
         self.refresh_cfg_freqs();
     }
@@ -114,6 +122,7 @@ impl Side {
         vfo.tx_dcs_cts_num = subaudio_to_code(self.cfg.subaudio_tx);
         vfo.set_freq_dir(self.freq_dir);
         vfo.set_ani_target(self.ani_target);
+        vfo.set_scramble_busy(self.scramble, self.busy_lock);
         vfo.to_bytes()
     }
 
@@ -130,6 +139,8 @@ impl Side {
         self.cfg.subaudio_tx = backup.subaudio_tx;
         self.cfg.subaudio_rx = backup.subaudio_rx;
         self.ani_target = backup.ani_target;
+        self.scramble = backup.scramble;
+        self.busy_lock = backup.busy_lock;
         self.refresh_cfg_freqs();
     }
 
@@ -141,6 +152,8 @@ impl Side {
         self.rx_only = ch.tx_is_blank();
         self.cfg.modulation = modulation_for(self.rx_freq_hz);
         self.ani_target = ch.ani_target();
+        self.scramble = ch.scramble();
+        self.busy_lock = ch.busy_lock();
         self.cfg.wide_band = !ch.wide_narrow();
         self.cfg.power = power_from_raw(ch.tx_power);
         self.cfg.subaudio_tx = subaudio_from_code(ch.tx_dcs_cts_num);

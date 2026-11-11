@@ -49,7 +49,21 @@ pub(super) fn dispatch(app: &mut App, syst: &mut SYST, ev: KeyEvent) {
         Mode::Scan => scan::dispatch(app, syst, ev),
         Mode::ModeMenu => modes::dispatch_menu(app, syst, ev),
         Mode::RangeInput => modes::dispatch_range(app, syst, ev),
-        Mode::External(_) => super::overlay::dispatch_key(app, syst, ev),
+        Mode::External(slot) => {
+            let func = match ev.kind {
+                KeyEventKind::Single => short_function(app, ev.key),
+                KeyEventKind::Long => long_function(app, ev.key),
+                _ => 0,
+            };
+            if slot == keyfn::TEXT_SLOT
+                && matches!(ev.key, KeyId::Side1 | KeyId::Side2)
+                && keyfn::from_u8(func) == keyfn::KeyFunction::OpenText
+            {
+                super::overlay::close_to_radio(app, syst);
+            } else {
+                super::overlay::dispatch_key(app, syst, ev);
+            }
+        }
     }
 }
 

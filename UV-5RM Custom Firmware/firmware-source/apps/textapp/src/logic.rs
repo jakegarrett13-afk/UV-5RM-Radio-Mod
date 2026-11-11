@@ -118,7 +118,9 @@ const KEY_MENU: u8 = 12;
 const KEY_EXIT: u8 = 13;
 const KEY_UP: u8 = 14;
 const KEY_DOWN: u8 = 15;
+const KEY_VM: u8 = 16;
 const KEY_AB: u8 = 17;
+const KEY_BAND: u8 = 18;
 const NO_KEY: u8 = 0xFF;
 
 const BLACK: u16 = 0x0000;
@@ -257,6 +259,32 @@ const TONE_MS: u32 = 110;
 const CHIME_NEW: u8 = 1;
 const CHIME_DELIVERED: u8 = 2;
 
+// Quick messages: ten 64-byte records at the start of the app data area, which the PC
+// writes with the programming port's satellite-table command. A record is `Q`, a length
+// and the text. Any record without the `Q`, as on a radio the PC hasn't set up, reads as
+// the built-in message in its place.
+const QUICK_ADDR: u32 = 0x19_4000;
+const QUICK_BYTES: u32 = 64;
+const QUICK_MAGIC: u8 = b'Q';
+const QUICK_COUNT: u8 = 10;
+const QUICK_DEFAULTS: [&[u8]; QUICK_COUNT as usize] = [
+    b"COPY THAT",
+    b"YES",
+    b"NO",
+    b"ARE YOU OK?",
+    b"ALL OK HERE",
+    b"ON MY WAY",
+    b"ARRIVED SAFE",
+    b"WHERE ARE YOU?",
+    b"STAY PUT, I'M COMING TO YOU",
+    b"EMERGENCY! NEED HELP NOW",
+];
+const LIST_ROW: i16 = 8;
+/// What fits on a row after the number, in the small font.
+const LIST_CHARS: usize = 29;
+
+const LOCKED: &[u8] = b"KEYS LOCKED: HOLD * TO UNLOCK";
+
 const TAPS: [&[u8]; 10] = [
     b" 0", b".,?!-/1", b"ABC2", b"DEF3", b"GHI4", b"JKL5", b"MNO6", b"PQRS7", b"TUV8", b"WXYZ9",
 ];
@@ -275,6 +303,9 @@ struct State {
     redraw_hint: bool,
     armed: bool,
     high_power: bool,
+    locked: bool,
+    picking: bool,
+    pick: u8,
     hz: u32,
     wide: bool,
     me: u8,
@@ -348,6 +379,9 @@ const ZEROED: State = State {
     redraw_hint: false,
     armed: false,
     high_power: false,
+    locked: false,
+    picking: false,
+    pick: 0,
     hz: 0,
     wide: false,
     me: 0,
@@ -954,7 +988,7 @@ fn tick(api: &Api, dt: u32) -> AppResult {
     poll_modem(api, s);
     if s.chime_due != 0 {
         // Its own tick, so the reply's quiet check next tick reads the channel afresh.
-        let notes: &[u16] = if s.chime_due == CHIME_NEW { &[880, 1320] } else { &[1320] };
+        let notes: &[u16] = if s.chime_due == CHIME_NEW { &[880, 1320] } else { &[1320, 880] };
         s.chime_due = 0;
         chime(api, s, notes);
         return AppResult::Continue;
@@ -1004,8 +1038,80 @@ fn type_digit(s: &mut State, digit: u8) {
     s.redraw_comp = true;
 }
 
+/// Quick message `i` into `out`, returning its length.
+fn quick(api: &Api, i: u8, out: &mut [u8; MAX_LEN]) -> usize {
+    let mut r = [0u8; 2 + MAX_LEN];
+    (api.nor_read)(QUICK_ADDR + i as u32 * QUICK_BYTES, r.as_mut_ptr(), r.len() as u32);
+    let (text, n) = if r[0] == QUICK_MAGIC && r[1] as usize <= MAX_LEN {
+        (&r[2..], r[1] as usize)
+    } else {
+        let d = QUICK_DEFAULTS[i as usize];
+        (d, d.len())
+    };
+    for (o, &c) in out.iter_mut().zip(&text[..n]) {
+        *o = if (0x20..0x7F).contains(&c) { c } else { b'?' };
+    }
+    n
+}
+
+fn close_list(s: &mut State) {
+    s.picking = false;
+    s.redraw_all = true;
+}
+
+/// Keys while the quick-message list is open.
+fn pick_key(api: &Api, s: &mut State, id: u8) {
+    match id {
+        KEY_UP => s.pick = (s.pick + QUICK_COUNT - 1) % QUICK_COUNT,
+        KEY_DOWN => s.pick = (s.pick + 1) % QUICK_COUNT,
+        // 1 is the first message and 0 the tenth, as on the keypad.
+        0..=9 => s.pick = (id + QUICK_COUNT - 1) % QUICK_COUNT,
+        KEY_MENU => {
+            let mut text = [0u8; MAX_LEN];
+            let n = quick(api, s.pick, &mut text);
+            if n == 0 {
+                set_notice(s, b"THAT ONE IS EMPTY");
+            } else if start_send(api, s, &text[..n]) {
+                close_list(s);
+            }
+            return;
+        }
+        KEY_POUND => {
+            s.comp_len = quick(api, s.pick, &mut s.comp) as u8;
+            s.tap_key = NO_KEY;
+            s.tap_left = 0;
+            close_list(s);
+            return;
+        }
+        KEY_EXIT | KEY_VM => {
+            close_list(s);
+            return;
+        }
+        _ => return,
+    }
+    s.redraw_msgs = true;
+    s.redraw_comp = true;
+}
+
 fn key(api: &Api, id: u8, kind: u8) -> AppResult {
     let s = st();
+    // Hold * locks every key but itself, as on the main screen. CALL still leaves the
+    // app, since the firmware handles it.
+    if id == KEY_STAR && kind == KIND_LONG {
+        s.locked = !s.locked;
+        set_notice(s, if s.locked { LOCKED } else { b"KEYS UNLOCKED" });
+        return AppResult::Continue;
+    }
+    if s.locked {
+        if kind == KIND_SINGLE {
+            set_notice(s, LOCKED);
+        }
+        return AppResult::Continue;
+    }
+    if s.picking && kind == KIND_SINGLE {
+        pick_key(api, s, id);
+        return AppResult::Continue;
+    }
     if kind == KIND_LONG {
         if id == KEY_EXIT {
             modem_off(s);
@@ -1042,7 +1148,11 @@ fn key(api: &Api, id: u8, kind: u8) -> AppResult {
                 s.redraw_comp = true;
             }
         }
-        KEY_STAR => {
+        KEY_VM => {
+            s.picking = true;
+            s.redraw_all = true;
+        }
+        KEY_BAND => {
             let mut b = Line::new();
             b.push(b"PING ");
             b.num(s.pings as u32 + 1);
@@ -1197,12 +1307,39 @@ fn draw_msgs(api: &Api, s: &State) {
     }
 }
 
+/// The quick messages, one row each from where the key letters usually are, with the
+/// chosen one highlighted. The typing box below shows it in full.
+fn draw_list(api: &Api, s: &State) {
+    (api.fill_rect)(0, KEYS_Y, SCREEN_W, QUICK_COUNT as u16 * LIST_ROW as u16, BLACK);
+    for i in 0..QUICK_COUNT {
+        let mut q = [0u8; MAX_LEN];
+        let n = quick(api, i, &mut q);
+        let mut l = Line::new();
+        l.num(((i + 1) % QUICK_COUNT) as u32);
+        l.push(b" ");
+        l.push(&q[..n.min(LIST_CHARS)]);
+        let y = KEYS_Y + i as i16 * LIST_ROW;
+        let bg = if i == s.pick { HILITE } else { BLACK };
+        (api.fill_rect)(0, y, SCREEN_W, LIST_ROW as u16, bg);
+        text(api, 2, y, l.as_slice(), WHITE, bg, F5);
+    }
+}
+
 fn draw_comp(api: &Api, s: &State) {
     (api.fill_rect)(0, COMP_Y, SCREEN_W, 21, BLACK);
     (api.fill_rect)(0, COMP_Y, SCREEN_W, 1, HEADER);
-    let n = s.comp_len as usize;
-    for (row, chunk) in s.comp[..n].chunks(COLS).enumerate() {
+    let mut q = [0u8; MAX_LEN];
+    let (t, n) = if s.picking {
+        let n = quick(api, s.pick, &mut q);
+        (&q, n)
+    } else {
+        (&s.comp, s.comp_len as usize)
+    };
+    for (row, chunk) in t[..n].chunks(COLS).enumerate() {
         text(api, 2, COMP_Y + 2 + row as i16 * 10, chunk, WHITE, BLACK, F6);
+    }
+    if s.picking {
+        return;
     }
     let at = |i: usize| (2 + (i % COLS) as i16 * 6, COMP_Y + 2 + (i / COLS) as i16 * 10);
     if s.tap_key != NO_KEY && n > 0 {
@@ -1219,6 +1356,8 @@ fn draw_hint(api: &Api, s: &State) {
     (api.fill_rect)(0, HINT_Y, SCREEN_W, 9, BLACK);
     if let Some(n) = s.notice {
         text(api, 2, HINT_Y, n, AMBER, BLACK, F5);
+    } else if s.locked {
+        text(api, 2, HINT_Y, LOCKED, AMBER, BLACK, F5);
     } else if s.pending {
         let mut l = Line::new();
         l.push(b"TRY ");
@@ -1227,8 +1366,10 @@ fn draw_hint(api: &Api, s: &State) {
         l.num(MAX_TRIES as u32);
         l.push(b"  EXIT STOPS");
         text(api, 2, HINT_Y, l.as_slice(), AMBER, BLACK, F5);
+    } else if s.picking {
+        text(api, 2, HINT_Y, b"MENU SEND  # EDIT  EXIT BACK", GRAY, BLACK, F5);
     } else {
-        text(api, 2, HINT_Y, b"MENU SEND  EXIT DEL  *PING", GRAY, BLACK, F5);
+        text(api, 2, HINT_Y, b"MENU SEND EXIT DEL VFO/MR QUICK", GRAY, BLACK, F5);
     }
 }
 
@@ -1237,15 +1378,21 @@ fn draw(api: &Api) -> AppResult {
     if s.redraw_all {
         (api.fill_rect)(0, 0, SCREEN_W, 128, BLACK);
         draw_title(api, s);
-        text(api, 2, KEYS_Y, b"1.,? 2ABC 3DEF 4GHI 5JKL", GRAY, BLACK, F5);
-        text(api, 2, KEYS_Y + 8, b"6MNO 7PQRS 8TUV 9WXYZ 0SP", GRAY, BLACK, F5);
+        if !s.picking {
+            text(api, 2, KEYS_Y, b"1.,? 2ABC 3DEF 4GHI 5JKL", GRAY, BLACK, F5);
+            text(api, 2, KEYS_Y + 8, b"6MNO 7PQRS 8TUV 9WXYZ 0SP", GRAY, BLACK, F5);
+        }
         s.redraw_msgs = true;
         s.redraw_comp = true;
         s.redraw_hint = true;
         s.redraw_all = false;
     }
     if s.redraw_msgs {
-        draw_msgs(api, s);
+        if s.picking {
+            draw_list(api, s);
+        } else {
+            draw_msgs(api, s);
+        }
         s.redraw_msgs = false;
     }
     if s.redraw_comp {
@@ -1303,6 +1450,12 @@ pub fn debug_got() -> u16 {
 #[cfg(not(target_os = "none"))]
 pub fn debug_pending() -> (bool, u8) {
     (st().pending, st().tries)
+}
+
+/// Whether the quick-message list is open, which one is chosen, and the key lock.
+#[cfg(not(target_os = "none"))]
+pub fn debug_quick() -> (bool, u8, bool) {
+    (st().picking, st().pick, st().locked)
 }
 
 #[cfg(not(target_os = "none"))]
