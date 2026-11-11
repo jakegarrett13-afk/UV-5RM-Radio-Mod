@@ -417,6 +417,12 @@ impl<'a> Radio<'a> {
     const MIC_MUTE_SETTLE_US: u32 = 500;
 
     pub fn read_mic_level(&mut self, syst: &mut SYST) -> u8 {
+        // Do not interrupt received audio (including Monitor and broadcast FM)
+        // for a microphone sample. VOX is inhibited during RX; TX metering and
+        // sampling with the audio amplifier already off keep their old behavior.
+        if self.speaker_on && !self.tx_state {
+            return 0;
+        }
         let was_on = self.speaker_on;
         if was_on {
             self.set_speaker(false);

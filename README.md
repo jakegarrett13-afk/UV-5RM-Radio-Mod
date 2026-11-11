@@ -69,7 +69,7 @@ py source-changes\bootloader_probe.py COM3
 the cable. The long number is a checksum, and the tool refuses a file that doesn't match it.
 
 ```
-py source-changes\flash_bf.py UV-5RM_Custom_Firmware.BF COM3 e76b5a605732f523
+py source-changes\flash_bf.py UV-5RM_Custom_Firmware.BF COM3 fb160fe76849a819
 ```
 
 **4. Install the logo and apps.** Wait for the radio to restart to its main screen. This reads
