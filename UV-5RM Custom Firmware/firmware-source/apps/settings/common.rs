@@ -1361,7 +1361,15 @@ fn adjust(api: &Api, st: &mut ItemsState, item: SettingItem, up: bool) {
 
         #[cfg(feature = "g_keys")]
         Side1Short | Side1Long | Side2Short | Side2Long | BandShort
-        | BandLong => clamp_step(cur, up, 0, 10),
+        | BandLong => {
+            // 9 was SEARCH (now an app). Skip it without renumbering saved IDs.
+            let next = clamp_step(cur, up, 0, 10);
+            if next == 9 {
+                clamp_step(next, up, 0, 10)
+            } else {
+                next
+            }
+        },
 
         #[cfg(feature = "g_ani")]
         AniTx => 1 - cur,
