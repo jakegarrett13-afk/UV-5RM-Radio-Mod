@@ -51,6 +51,35 @@ const IDLE_GAP_100US: u32 = 50_000;
 const TONE_WINDOW_100US: u32 = 15_000;
 
 const CTCSS_COUNT: i32 = 50;
+const DCS_COUNT: i32 = 105;
+
+/// On air, every inverted DCS code is the same bitstream as some normal code
+/// (D023I is D047N rotated and flipped), so the chip's detector, which only
+/// reports normal codes, reads an inverted transmission as its twin.
+/// `DCS_TWIN[i]` is the inverted code (index into the firmware's DCS table)
+/// that sends the same signal as normal code `i`; 255 = none (645N is itself
+/// the same signal as 526N, which the detector reports instead).
+const DCS_TWIN: [u8; 105] = [
+    7, 39, 76, 90, 8, 31, 70, 0, 4, 72, 66, 49, 51, 40, 80, 32, 98, 26, 104,
+    36, 62, 61, 85, 35, 65, 50, 17, 100, 47, 79, 42, 5, 15, 46, 60, 23, 19, 64,
+    59, 1, 13, 82, 30, 75, 71, 101, 33, 28, 73, 11, 25, 12, 96, 67, 83, 77, 74,
+    84, 88, 38, 34, 21, 20, 102, 37, 24, 10, 53, 99, 81, 6, 44, 9, 48, 56, 43,
+    2, 55, 95, 29, 14, 69, 41, 54, 57, 22, 97, 91, 58, 92, 3, 87, 89, 255, 103,
+    78, 52, 86, 16, 68, 27, 45, 63, 94, 18,
+];
+
+/// Merged subaudio index of the inverted code that sounds the same as the
+/// detected normal DCS code at `idx`, or -1.
+fn dcs_twin(idx: i32) -> i32 {
+    let i = idx - CTCSS_COUNT;
+    if !(0..DCS_COUNT).contains(&i) {
+        return -1;
+    }
+    match DCS_TWIN[i as usize] {
+        255 => -1,
+        t => CTCSS_COUNT + DCS_COUNT + t as i32,
+    }
+}
 const CTCSS_HITS: u8 = 2;
 const VOTES_ENOUGH: u8 = 3;
 const TONE_TRIES: u8 = 5;
@@ -608,6 +637,12 @@ fn draw_cand(api: &Api, st: &State, i: usize, y: i16) {
         let mut tmp = [0u8; 16];
         let n = (api.subaudio_format)(idx, tmp.as_mut_ptr(), 16) as usize;
         b.s(&tmp[..n.min(tmp.len())]);
+        let twin = dcs_twin(idx);
+        if twin >= 0 {
+            let n = (api.subaudio_format)(twin, tmp.as_mut_ptr(), 16) as usize;
+            b.ch(b'=');
+            b.s(&tmp[..n.min(tmp.len())]);
+        }
         if c.tone_mixed() {
             b.ch(b'?');
         }
@@ -691,6 +726,11 @@ fn draw(api: &Api) -> AppResult {
 
 
 // Read-only views for the PC simulator; not part of the radio build.
+#[cfg(not(target_os = "none"))]
+pub fn debug_twin(idx: i32) -> i32 {
+    dcs_twin(idx)
+}
+
 #[cfg(not(target_os = "none"))]
 pub fn debug_dump() -> std::string::String {
     use std::fmt::Write;

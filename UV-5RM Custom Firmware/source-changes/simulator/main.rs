@@ -24,6 +24,8 @@ mod qtscan2;
 mod search2;
 #[path = "../apps_new/textapp/src/logic.rs"]
 mod textapp;
+#[path = "../apps_new/txlab/src/logic.rs"]
+mod txlab;
 
 mod flash_map {
     pub mod addr {
@@ -412,10 +414,56 @@ extern "C" fn sub_format(v: i32, out: *mut u8, _cap: u16) -> u16 {
         "OFF".to_string()
     } else if v < 50 {
         format!("{}.{}Hz", CTCSS[v as usize] / 10, CTCSS[v as usize] % 10)
+    } else if v < 155 {
+        format!("D{:03o}N", DCS[(v - 50) as usize])
     } else {
-        format!("D{:03o}N", v - 49)
+        format!("D{:03o}I", DCS[((v - 155) as usize).min(104)])
     };
     copy_str(&s, out)
+}
+/// The firmware's `settings::DCS_TABLE`.
+const DCS: [u16; 105] = [
+    0o023, 0o025, 0o026, 0o031, 0o032, 0o036, 0o043, 0o047, 0o051, 0o053, 0o054, 0o065, 0o071, 0o072, 0o073,
+    0o074, 0o114, 0o115, 0o116, 0o122, 0o125, 0o131, 0o132, 0o134, 0o143, 0o145, 0o152, 0o155, 0o156, 0o162,
+    0o165, 0o172, 0o174, 0o205, 0o212, 0o223, 0o225, 0o226, 0o243, 0o244, 0o245, 0o246, 0o251, 0o252, 0o255,
+    0o261, 0o263, 0o265, 0o266, 0o271, 0o274, 0o306, 0o311, 0o315, 0o325, 0o331, 0o332, 0o343, 0o346, 0o351,
+    0o356, 0o364, 0o365, 0o371, 0o411, 0o412, 0o413, 0o423, 0o431, 0o432, 0o445, 0o446, 0o452, 0o454, 0o455,
+    0o462, 0o464, 0o465, 0o466, 0o503, 0o506, 0o516, 0o523, 0o526, 0o532, 0o546, 0o565, 0o606, 0o612, 0o624,
+    0o627, 0o631, 0o632, 0o645, 0o654, 0o662, 0o664, 0o703, 0o712, 0o723, 0o731, 0o732, 0o734, 0o743, 0o754,
+];
+/// Same Golay(23,12) encode as the firmware's `Fd6818::dcs_encode`.
+fn dcs_encode(code: u16) -> u32 {
+    let source = code | 0x0800;
+    let (mut remainder, mut bit) = (0u16, 1u16);
+    for _ in 0..12 {
+        let feedback = if (source & bit != 0) == (remainder & 2 != 0) { 0 } else { 0x0C75 };
+        bit <<= 1;
+        remainder >>= 1;
+        remainder ^= feedback;
+    }
+    ((source as u32) | ((remainder as u32) << 11)) & 0x7F_FFFF
+}
+/// What the chip's detector reports for a 23-bit stream: the first normal code that matches at any
+/// rotation, as a merged index, like the firmware's `find_standard_dcs`.
+fn dcs_detect(raw: u32) -> i32 {
+    for (i, &code) in DCS.iter().enumerate() {
+        let mut w = dcs_encode(code);
+        for _ in 0..23 {
+            w = ((w << 1) | (w >> 22)) & 0x7F_FFFF;
+            if w == raw {
+                return 50 + i as i32;
+            }
+        }
+    }
+    -1
+}
+/// The merged index the detector reports when a radio sends merged index `v` (normal or inverted).
+fn dcs_heard(v: i32) -> i32 {
+    if v < 155 {
+        dcs_detect(dcs_encode(DCS[(v - 50) as usize]))
+    } else {
+        dcs_detect(!dcs_encode(DCS[(v - 155) as usize]) & 0x7F_FFFF)
+    }
 }
 extern "C" fn handoff_w(_: *const u8, _: u16) -> bool {
     false
@@ -784,6 +832,7 @@ fn test_repeater() {
     add(OUT, 120, -1, output_on);
     add(IN_LOW, 100, 50 + 18, talking);
     run(app, 60);
+    shot("rpt_8_dcs");
     let dump = rptfind_debug();
     println!("     {dump}");
     check(dump.contains("tone=68"), "reads DCS");
@@ -1273,6 +1322,39 @@ fn test_search_qt() {
     check(press(app, KEY_MENU), "Menu saves and exits");
     check(sim().sub_saved == Some((1000, true)), "saved 100.0 to receive and transmit");
     check(!sim().filter_on, "tone filter off after leaving");
+
+    println!("SEARCH QT: inverted DCS");
+    // Every inverted code is heard as its normal twin; the app's table must name it back.
+    let mut wrong = 0;
+    for j in 0..105 {
+        let heard = dcs_heard(155 + j);
+        let twin = qtscan2::debug_twin(heard);
+        // 645I and 526I are the same signal, so either name is right.
+        let same = twin == 155 + j || (dcs_heard(twin) == heard && twin >= 155);
+        if !same || rptfind::debug_twin(heard) != twin {
+            wrong += 1;
+            println!("     D{:03o}I heard as index {heard}, twin {twin}", DCS[j as usize]);
+        }
+    }
+    check(wrong == 0, "all 105 inverted codes: the twin shown is the code sent");
+    check((0..105).all(|i| dcs_heard(50 + i) == 50 + i || DCS[i as usize] == 0o645), "normal codes read as themselves (645N reads as 526N)");
+    let d023i = 155;
+    let d047n = dcs_heard(d023i);
+    check(d047n == 50 + 7, "D023I is heard as D047N");
+    sq_open(OUT);
+    add(OUT, 120, d047n, |_| true);
+    run(app, 1);
+    shot("sq_6_qt_dcs_twin");
+    check(qtscan2::debug_found() == d047n, "QT Scan finds it");
+    let twin_row = (74..84).any(|y| (90..160).any(|x| sim().fb[y * W + x] != 0));
+    check(twin_row, "and shows SAME AS D023I");
+    check(press(app, KEY_MENU), "Menu saves and exits");
+    check(sim().sub_saved == Some((8, false)), "saved D047N to receive only");
+    sq_open(OUT);
+    add(OUT, 120, IDX_100, |_| true);
+    run(app, 1);
+    let twin_row = (74..84).any(|y| (0..160).any(|x| sim().fb[y * W + x] != 0));
+    check(!twin_row, "no SAME AS line for a CTCSS tone");
 
     println!("SEARCH QT: switching to Search");
     sq_open(OUT);
@@ -2357,7 +2439,67 @@ fn test_text() {
     check(chip().regs[0x58] == 0, "a second clean-up is harmless");
 }
 
+fn test_txlab() {
+    let app: Entry = txlab::entry;
+    println!("TX LAB");
+    reset(OUT);
+    chip_reset();
+    // As the firmware leaves them: deviation 0x3516, flat 3 kHz trim, mic 127, DC filter 7.
+    let c = chip();
+    c.regs[0x40] = 0x3516;
+    c.regs[0x74] = 0xF50B;
+    c.regs[0x7D] = 0xE97F;
+    c.regs[0x7E] = 0x303E;
+    let before = c.regs;
+    app(&API, AppEvent::Enter);
+    app(&API, AppEvent::Draw);
+    shot("txlab_1_open");
+    check(sim().tx_enabled, "PTT may key while it's open");
+    check(chip().regs == before, "opening changes no register");
+
+    txlab::debug_select(1);
+    press(app, 11);
+    press(app, 11);
+    check(chip().regs[0x40] == 0x3000 | 1502, "# twice raises deviation by 200, top bits kept");
+    txlab::debug_select(2);
+    press(app, 11);
+    check(chip().regs[0x2B] == 0x0301, "pre-emphasis off sets bit 0 only");
+    txlab::debug_select(5);
+    press(app, 11);
+    check(chip().regs[0x74] == 0xE61C, "3 kHz trim +1 dB");
+    txlab::debug_select(6);
+    press(app, 10);
+    check(chip().regs[0x7E] == 0x3036, "DC filter 7 to 6, AGC bits kept");
+    txlab::debug_select(0);
+    press(app, 10);
+    check(chip().regs[0x7D] == 0xE97B, "mic 127 to 123");
+    txlab::debug_select(7);
+    press(app, 11);
+    check(chip().regs[0x2B] == 0x0201, "RX de-emphasis on clears bit 8");
+    shot("txlab_2_changed");
+
+    // A key-up: the firmware rewrites the mic register and, back on receive, 0x2B.
+    sim().transmitting = true;
+    chip().regs[0x7D] = 0xE97F;
+    run(app, 1);
+    check(chip().regs[0x7D] == 0xE97B, "after key-up the app's mic value is back");
+    sim().transmitting = false;
+    chip().regs[0x2B] = 0x0300;
+    run(app, 1);
+    check(chip().regs[0x2B] == 0x0201, "after returning to receive the app's filters are back");
+
+    txlab::debug_select(1);
+    press(app, 0);
+    check(chip().regs[0x40] == 0x3516, "0 puts one setting back");
+    press(app, 12);
+    check(chip().regs[0x2B] == 0x0300 && chip().regs[0x74] == 0xF50B, "Menu puts them all back");
+    press(app, 11);
+    check(press(app, 13), "Exit leaves");
+    check(chip().regs == before, "every register as found");
+}
+
 fn main() {
+    test_txlab();
     test_repeater();
     test_sweep();
     test_fox();
