@@ -515,7 +515,11 @@ const POWER_SLEEP_VALUE: u16 = POWER_UP_VALUE & 0xFFF0;
 const DEVIATION_VALUE: u16 = 0x3516;
 /// Low 7 bits at 127: the loudest and clearest of the levels compared by ear
 /// on a real radio. They don't act as a simple volume: 63 was quieter than 40.
+#[cfg(not(feature = "bk4819"))]
 const MIC_SENS_VALUE: u16 = 0xE97F;
+/// Baofeng's 5RH BK stock (V0.14) REG_7D word.
+#[cfg(feature = "bk4819")]
+const MIC_SENS_VALUE: u16 = 0xE952;
 const DAC_GAIN: u16 = 15;
 
 pub struct Fd6818<'a> {
@@ -1120,8 +1124,19 @@ impl<'a> Fd6818<'a> {
     pub fn apply_tx_mic_gain(&mut self, syst: &mut SYST) {
         // A setting of 1..=128 replaces the low 7 bits; anything else is the
         // default. The calibration byte isn't used: its level was too quiet.
+        #[cfg(not(feature = "bk4819"))]
         let value = if (1..=128).contains(&self.mic_gain_setting) {
             (MIC_SENS_VALUE & 0xFF80) | (self.mic_gain_setting - 1) as u16
+        } else {
+            MIC_SENS_VALUE
+        };
+        // BK4819: REG_7D's mic sensitivity is only bits [4:0] (0.5dB/step),
+        // over a fixed 0xE940 (K5 and Baofeng's BK stock both keep it). The
+        // default is the BK stock word, 0xE952; settings 1..=128 map onto
+        // 0..=31.
+        #[cfg(feature = "bk4819")]
+        let value = if (1..=128).contains(&self.mic_gain_setting) {
+            0xE940 | ((self.mic_gain_setting - 1) >> 2) as u16
         } else {
             MIC_SENS_VALUE
         };

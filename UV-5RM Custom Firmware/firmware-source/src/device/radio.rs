@@ -524,6 +524,27 @@ impl<'a> Radio<'a> {
         self.roger_tone = tone;
     }
 
+    /// Scramble group for the transmit path. The BK4819 inverts transmitted
+    /// audio too (the FD6818 only descrambles on receive), and scrambling
+    /// isn't allowed on the ham bands, so the BK build never transmits it.
+    fn tx_scramble(&self) -> u8 {
+        if cfg!(feature = "bk4819") {
+            0
+        } else {
+            self.scramble_level
+        }
+    }
+
+    /// Scramble group to restore after a tone or app: the channel's own on
+    /// receive, the transmit path's while keyed.
+    fn scramble_now(&self) -> u8 {
+        if self.tx_state {
+            self.tx_scramble()
+        } else {
+            self.scramble_level
+        }
+    }
+
     /// Takes effect the next time the radio enters RX or TX.
     pub fn set_scramble_value(&mut self, level: u8) {
         self.scramble_level = level;
@@ -547,7 +568,7 @@ impl<'a> Radio<'a> {
             delay::ms(syst, GAP_MS);
         }
         self.fd6818.exit_dtmf_mode(syst);
-        self.fd6818.set_scramble(syst, self.scramble_level);
+        self.fd6818.set_scramble(syst, self.scramble_now());
         self.fd6818.enter_dtmf_mode(syst, false);
     }
 
@@ -652,7 +673,7 @@ impl<'a> Radio<'a> {
             self.cfg.wide_band,
             self.cfg.modulation,
         );
-        self.fd6818.set_scramble(syst, self.scramble_level);
+        self.fd6818.set_scramble(syst, self.scramble_now());
         self.set_speaker(self.audio_open);
         false
     }
@@ -684,7 +705,7 @@ impl<'a> Radio<'a> {
             self.set_speaker(false);
         }
         self.fd6818.tx_single_tone_off(syst, key_tx);
-        self.fd6818.set_scramble(syst, self.scramble_level);
+        self.fd6818.set_scramble(syst, self.scramble_now());
 
         let state = if self.audio_open {
             AfOutState::RxAudio
@@ -697,7 +718,7 @@ impl<'a> Radio<'a> {
             self.cfg.wide_band,
             self.cfg.modulation,
         );
-        self.fd6818.set_scramble(syst, self.scramble_level);
+        self.fd6818.set_scramble(syst, self.scramble_now());
         if local_speaker {
             self.set_speaker(self.audio_open);
         }
@@ -709,7 +730,7 @@ impl<'a> Radio<'a> {
 
     pub fn rtone_off(&mut self, syst: &mut SYST) {
         self.fd6818.tx_single_tone_off(syst, true);
-        self.fd6818.set_scramble(syst, self.scramble_level);
+        self.fd6818.set_scramble(syst, self.scramble_now());
     }
 
     /// Local-only sidetone
@@ -721,7 +742,7 @@ impl<'a> Radio<'a> {
     pub fn sidetone_off(&mut self, syst: &mut SYST) {
         self.set_speaker(false);
         self.fd6818.tx_single_tone_off(syst, false);
-        self.fd6818.set_scramble(syst, self.scramble_level);
+        self.fd6818.set_scramble(syst, self.scramble_now());
     }
 
     pub fn toggle_monitor(&mut self) {
@@ -871,7 +892,7 @@ impl<'a> Radio<'a> {
         self.fd6818.set_tx_band_off(syst);
         self.fd6818.power_rx(syst);
         self.rf_parked = false;
-        self.fd6818.set_scramble(syst, self.scramble_level);
+        self.fd6818.set_scramble(syst, self.scramble_now());
         let tuned_freq_hz = if matches!(
             self.cfg.modulation,
             Modulation::Usb | Modulation::Cw
@@ -935,7 +956,7 @@ impl<'a> Radio<'a> {
         self.fd6818.set_frequency_hz(syst, self.cfg.tx_freq_hz);
         self.fd6818.set_wide_bandwidth(syst, self.cfg.wide_band);
         self.fd6818.set_subaudio_tx(syst, self.cfg.subaudio_tx);
-        self.fd6818.set_scramble(syst, self.scramble_level);
+        self.fd6818.set_scramble(syst, self.tx_scramble());
         self.fd6818.apply_tx_mic_gain(syst);
         self.fd6818.tx_on(syst);
         #[cfg(not(feature = "bk4819"))]
