@@ -17,6 +17,7 @@ internet or extra hardware.
 | **TEXT** | Sends messages up to 50 characters, retries until confirmed, saves them, and plays a tone when one arrives. Ten quick messages send without typing, and you can change them from the PC |
 | **Bands** | Press Band to pick a set of channels to use and scan, like Weather, Air or your own. Make up to 16 on the PC, or type a custom range |
 | **BAND SWEEP** | Sweeps a whole band for activity |
+| **SPECTRUM** | Band scope with a waterfall, peak hold and auto-listen. See the [Spectrum guide](docs/SPECTRUM_GUIDE.md) |
 | **RPT FINDER** | Works out a repeater's input frequency and tone |
 | **FOX HUNT** | Signal meter and rough distance estimate for finding a transmitter |
 | **SEARCH/QT SCAN** | Finds a nearby signal's frequency, or the tone on your channel; press 1 to switch |
@@ -36,8 +37,9 @@ This firmware only fits one hardware version. Radios that look identical can hav
 
 | Screen says | What to do |
 |---|---|
-| `5RHNRFB-YP07` | This is the right hardware, so carry on |
-| Anything else, such as `...NRF` or `...BK` | **Don't flash it.** It may boot but not transmit or receive |
+| `5RHNRFB-YP07` | This is the right hardware, so carry on with `UV-5RM_Custom_Firmware.BF` |
+| `5RHBK` | Carry on, but flash `UV-5RM_Custom_Firmware_BK4819.BF` instead. See [BK4819 radios](#bk4819-radios-5rhbk) |
+| Anything else, such as `...NRF` | **Don't flash it.** It may boot but not transmit or receive |
 
 ## What you need
 
@@ -70,6 +72,12 @@ the cable. The long number is a checksum, and the tool refuses a file that doesn
 
 ```
 py source-changes\flash_bf.py UV-5RM_Custom_Firmware.BF COM3 e76b5a605732f523
+```
+
+On a `5RHBK` radio, flash the BK4819 build instead:
+
+```
+py source-changes\flash_bf.py UV-5RM_Custom_Firmware_BK4819.BF COM3 540b03e61fe2ee3f
 ```
 
 **4. Install the logo and apps.** Wait for the radio to restart to its main screen. This reads
@@ -193,6 +201,31 @@ anything. Messages still arrive and are still confirmed, and **CALL** still goes
   security, so any radio with this app can read them.
 - Range and long messages have barely been tested. Most testing was short pings a few feet apart.
 
+## BK4819 radios (5RHBK)
+
+Some UV-5RMs, including radios sold as the AR-5RM, have a Beken BK4819 radio chip instead of the FD6818
+this firmware was written for. Their version screen (hold **8** while turning on) shows `5RHBK`. The
+MCU, pins, flash chip, screen and bootloader are the same. `UV-5RM_Custom_Firmware_BK4819.BF` is the
+V2.0 firmware built with the `bk4819` feature (`cargo build --release --features bk4819`). It carries
+[pull request #3](https://github.com/jakegarrett13-afk/UV-5RM-Radio-Mod/pull/3), written against V1,
+forward onto V2.0:
+
+- The radio chip starts with Baofeng's own values from the stock `5RH_BK_V0.14` firmware, not the
+  FD6818's BK4829 tuning.
+- Transmit power uses the stock BK gain word, which the factory power calibration assumes.
+- If the 16 MHz crystal doesn't start, the MCU runs from its internal clock at the same speed.
+- `MIC GAIN` uses the BK4819's 5-bit field: `DEFAULT` is the stock BK word (`0xE952`), and settings
+  0 to 127 step in fours.
+- Scramble is never transmitted. Unlike the FD6818, the BK4819 would invert transmitted audio, which
+  isn't allowed on the ham bands, so `RX SCRAMBLE` stays receive-only as on the other build.
+
+The default build is unchanged: with the feature off, the sources compile to the same binary as before.
+
+**Going back to stock:** flashing doesn't touch the bootloader, and Baofeng's stock BK firmware is in
+[amoxu/Baofeng-UV-5RM-5RH-RE](https://github.com/amoxu/Baofeng-UV-5RM-5RH-RE/tree/main/factory_firmware/BK_BK4819).
+Those files carry a second data region that `source-changes/flash_bf.py` refuses, so use Baofeng's
+`BF_Upgrade_Tool` from the same repo, or `firmware-source/tools/flash.py`. This restore hasn't been tried.
+
 ## Legal
 
 You're responsible for what you transmit.
@@ -243,6 +276,9 @@ The output folder has to exist. The simulator only checks logic, so it can't pro
 behaves on the air.
 
 ## Credits and license
+
+- BK4819 build: pull request #3 by pkkshadow, BK values from
+  [amoxu/Baofeng-UV-5RM-5RH-RE](https://github.com/amoxu/Baofeng-UV-5RM-5RH-RE)
 
 - Firmware base: [bf-5rh-firmware-open](https://github.com/sophiel-meow/bf-5rh-firmware-open)
 - Modem settings researched from the UV-K5 community's
