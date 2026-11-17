@@ -42,7 +42,8 @@ This firmware only fits one hardware version. Radios that look identical can hav
 ## What you need
 
 - A Windows PC. The tools are Python, so other systems may work, but they're untested.
-- [Python](https://www.python.org/downloads/), plus the serial library: `py -m pip install pyserial`
+- [Python](https://www.python.org/downloads/), plus the required libraries:
+  `py -m pip install pyserial pillow`
 - A Baofeng programming cable. The commands below assume `COM3`, so change it to match your port.
 
 Run these from the `UV-5RM Custom Firmware` folder.
@@ -72,12 +73,21 @@ the cable. The long number is a checksum, and the tool refuses a file that doesn
 py source-changes\flash_bf.py UV-5RM_Custom_Firmware.BF COM3 e76b5a605732f523
 ```
 
-**4. Install the logo and apps.** Wait for the radio to restart to its main screen. This reads
-everything back to confirm it.
+**4. Install the logo and apps.** Wait for the radio to restart to its main screen. Choose one of
+the included 160x128 RGB565 logos; the command reads everything back to confirm it.
+
+| File | Design |
+|---|---|
+| `skull_logo.rgb565` | Original skull logo |
+| `OOT.rgb565` | The Legend of Zelda: Ocarina of Time logo |
+| `zelda.rgb565` | White Zelda crest on black |
 
 ```
 py source-changes\setup_radio.py COM3 skull_logo.rgb565 64 apps
 ```
+
+Replace `skull_logo.rgb565` in that command with `OOT.rgb565` or `zelda.rgb565` to install a
+different bundled logo.
 
 **5. Turn on transmit.** It starts off as a safety step. Go to `SETTINGS` and set `TXINH` to off.
 
@@ -85,8 +95,63 @@ py source-changes\setup_radio.py COM3 skull_logo.rgb565 64 apps
 write them from the PC. Until then, `Band` only offers `ALL` and `CUSTOM RANGE`. See
 [Programming channels](#programming-channels).
 
-Optional extras: `set_boot_tune.py` sets a Doom-style start-up riff, and `set_radio2_mario_tune.py`
-sets a Super Mario one but only runs on one specific radio, so copy and edit it for yours.
+**7. Set a start-up tune (optional).** The unified tune tool supports named presets:
+
+| Preset | Also accepted | Length | Notes |
+|---|---|---:|---|
+| `doom` | *(default when omitted)* | 2.43 s | Doom-style riff |
+| `zelda` | | 6.12 s | Opening phrase from the Legend of Zelda NES title theme |
+| `song_of_storms` | `storms` | 7.14 s | Song of Storms melody |
+| `mario` | | 2.04 s | Sequence from the older radio-two Mario script |
+
+Run the command from the `UV-5RM Custom Firmware` folder, replacing `COM3` and the preset as needed:
+
+```
+py source-changes\set_boot_tune.py COM3 my-backup\boot-tune-before.bin zelda
+```
+
+The second argument must be a **file name**, not a directory such as `.`. Its parent directory must
+already exist. The script saves the radio's 168-byte settings record there before writing the tune,
+then reads the settings back to verify that nothing else changed. If you omit the preset, it uses
+`doom`. Enable the radio's boot sound in `SETTINGS` if it is currently off.
+
+`set_radio2_mario_tune.py` is retained as a reference; use the unified command above with `mario`
+for normal use.
+
+**8. Install a custom boot logo (optional).** To switch to one of the bundled RGB565 logos later,
+save the currently installed logo and write the selected file with:
+
+```
+py source-changes\set_boot_logo.py restore COM3 zelda.rgb565 --current-backup my-logo-backup.rgb565
+```
+
+Use `OOT.rgb565` instead to install the Ocarina of Time design. To create your own logo, images are
+fitted to the 160x128 display, composited over black, converted to the radio's RGB565 format, and
+previewed after color conversion. Preview an image locally without touching the radio:
+
+```
+py source-changes\set_boot_logo.py preview photo.png --preview logo-preview.png --fit contain
+```
+
+When the preview looks right, upload it while saving the currently installed logo first:
+
+```
+py source-changes\set_boot_logo.py upload COM3 photo.png logo-backup.rgb565 --preview logo-preview.png
+```
+
+The uploader skips an identical logo and reads the entire write back for verification. If
+verification fails, it restores the original automatically. A backup can also be restored later:
+
+```
+py source-changes\set_boot_logo.py restore COM3 logo-backup.rgb565
+```
+
+Keep the `.rgb565` backup: it is the exact logo previously read from your radio. Backup files named
+`*-backup.rgb565` are ignored by Git so they are not accidentally committed.
+
+Set `SETTINGS` -> `BOOTSCR` to `LOGO`. The logo is also dimmed behind menus, so a dark background
+and a centered subject usually keep menu text easiest to read. Use `--fit cover` to crop and fill the
+screen or `--fit stretch` to ignore the source aspect ratio.
 
 ## Programming channels
 
